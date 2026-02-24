@@ -115,7 +115,7 @@ public partial class SolutionParser
             throw new InvalidOperationException("The .slnx file must have a <Solution> root element.");
 
         var paths = doc.Root
-            .Elements("Project")
+            .Descendants("Project")
             .Select(e => e.Attribute("Path")?.Value)
             .Where(p => p != null && p.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
             .Select(p => NormalizePath(p!))
