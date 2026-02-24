@@ -1,0 +1,128 @@
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using DotNetTestRadar.Abstractions;
+
+namespace DotNetTestRadar.Services;
+
+public class ComplexityResult
+{
+    public Dictionary<string, int> FileComplexity { get; set; } = new();
+    public Dictionary<string, double> FileComplexityNorm { get; set; } = new();
+    public int SkippedFiles { get; set; }
+}
+
+public class ComplexityAnalyzer
+{
+    private readonly IFileSystem _fileSystem;
+
+    public ComplexityAnalyzer(IFileSystem fileSystem)
+    {
+        _fileSystem = fileSystem;
+    }
+
+    public ComplexityResult Analyze(string gitRoot, List<string> projectDirectories)
+    {
+        var result = new ComplexityResult();
+
+        foreach (var projectDir in projectDirectories)
+        {
+            var fullDir = Path.Combine(gitRoot, projectDir);
+            if (!_fileSystem.DirectoryExists(fullDir))
+                continue;
+
+            var files = _fileSystem.GetFiles(fullDir, "*.cs", recursive: true);
+            foreach (var file in files)
+            {
+                try
+                {
+                    var content = _fileSystem.ReadAllText(file);
+                    var complexity = CalculateFileComplexity(content);
+                    var relativePath = Path.GetRelativePath(gitRoot, file).Replace('\\', '/');
+                    result.FileComplexity[relativePath] = complexity;
+                }
+                catch
+                {
+                    result.SkippedFiles++;
+                }
+            }
+        }
+
+        // Normalize
+        var maxComplexity = result.FileComplexity.Values.DefaultIfEmpty(0).Max();
+        foreach (var (file, complexity) in result.FileComplexity)
+        {
+            result.FileComplexityNorm[file] = maxComplexity > 0
+                ? (double)complexity / maxComplexity
+                : 0.0;
+        }
+
+        return result;
+    }
+
+    public static int CalculateFileComplexity(string sourceCode)
+    {
+        var tree = CSharpSyntaxTree.ParseText(sourceCode);
+        var root = tree.GetRoot();
+        var totalComplexity = 0;
+
+        var methods = root.DescendantNodes().OfType<BaseMethodDeclarationSyntax>();
+        foreach (var method in methods)
+        {
+            totalComplexity += CalculateMethodComplexity(method);
+        }
+
+        // Also count local functions and property accessors
+        var accessors = root.DescendantNodes().OfType<AccessorDeclarationSyntax>()
+            .Where(a => a.Body != null || a.ExpressionBody != null);
+        foreach (var accessor in accessors)
+        {
+            totalComplexity += CalculateNodeComplexity(accessor);
+        }
+
+        return totalComplexity;
+    }
+
+    private static int CalculateMethodComplexity(BaseMethodDeclarationSyntax method)
+    {
+        var complexity = 1; // Base complexity
+        complexity += CalculateNodeComplexity(method);
+        return complexity;
+    }
+
+    private static int CalculateNodeComplexity(SyntaxNode node)
+    {
+        var complexity = 0;
+
+        foreach (var descendant in node.DescendantNodes())
+        {
+            switch (descendant)
+            {
+                case IfStatementSyntax:
+                case ForStatementSyntax:
+                case ForEachStatementSyntax:
+                case WhileStatementSyntax:
+                case DoStatementSyntax:
+                case CatchClauseSyntax:
+                case CasePatternSwitchLabelSyntax:
+                case CaseSwitchLabelSyntax:
+                case WhenClauseSyntax:
+                case ConditionalExpressionSyntax:
+                    complexity++;
+                    break;
+            }
+
+            if (descendant is BinaryExpressionSyntax binary)
+            {
+                if (binary.OperatorToken.IsKind(SyntaxKind.AmpersandAmpersandToken) ||
+                    binary.OperatorToken.IsKind(SyntaxKind.BarBarToken) ||
+                    binary.OperatorToken.IsKind(SyntaxKind.QuestionQuestionToken))
+                {
+                    complexity++;
+                }
+            }
+        }
+
+        return complexity;
+    }
+}
