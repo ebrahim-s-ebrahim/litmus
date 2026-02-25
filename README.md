@@ -1,5 +1,8 @@
 # DotNetTestRadar
 
+[![NuGet](https://img.shields.io/nuget/v/DotNetTestRadar.svg)](https://www.nuget.org/packages/DotNetTestRadar)
+[![NuGet Downloads](https://img.shields.io/nuget/dt/DotNetTestRadar.svg)](https://www.nuget.org/packages/DotNetTestRadar)
+
 A .NET global CLI tool that identifies **high-risk source files** in your .NET solution by cross-referencing three signals:
 
 - **Git churn** -- how frequently a file changes
