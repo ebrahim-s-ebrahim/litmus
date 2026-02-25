@@ -49,16 +49,8 @@ jobs:
       with:
         dotnet-version: 10.0.x
 
-    - name: Generate version
-      id: version
-      run: |
-        # Use date + short SHA for unique versions on every push
-        VERSION="1.0.0-ci.$(date +%Y%m%d).$(git rev-parse --short HEAD)"
-        echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
-        echo "Package version: $VERSION"
-
     - name: Pack
-      run: dotnet pack DotNetTestRadar/DotNetTestRadar.csproj -c Release -o ./nupkg /p:Version=${{ steps.version.outputs.VERSION }}
+      run: dotnet pack DotNetTestRadar/DotNetTestRadar.csproj -c Release -o ./nupkg
 
     - name: NuGet login (OIDC)
       uses: NuGet/login@v1
