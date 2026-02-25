@@ -1,7 +1,8 @@
 # DotNetTestRadar
 
-[![NuGet](https://img.shields.io/nuget/v/DotNetTestRadar.svg)](https://www.nuget.org/packages/DotNetTestRadar)
-[![NuGet Downloads](https://img.shields.io/nuget/dt/DotNetTestRadar.svg)](https://www.nuget.org/packages/DotNetTestRadar)
+[![NuGet](https://img.shields.io/nuget/v/DotNetTestRadar.svg?include_prereleases)](https://www.nuget.org/packages/DotNetTestRadar)
+[![NuGet Downloads](https://img.shields.io/nuget/dt/DotNetTestRadar.svg?include_prereleases)](https://www.nuget.org/packages/DotNetTestRadar)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/ebrahim-s-ebrahim/testradar/blob/main/LICENSE)
 
 A .NET global CLI tool that identifies **high-risk source files** in your .NET solution by cross-referencing three signals:
 

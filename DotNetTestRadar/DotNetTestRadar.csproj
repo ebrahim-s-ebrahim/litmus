@@ -13,14 +13,21 @@
       code coverage, and cyclomatic complexity. Helps teams prioritize where
       to add tests in legacy codebases.
     </Description>
-    <Authors>YourName</Authors>
+    <Authors>Ebrahim S. Ebrahim</Authors>
     <PackageTags>testing;coverage;legacy;dotnet-tool;unit-testing</PackageTags>
     <PackageIcon>icon.png</PackageIcon>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageProjectUrl>https://github.com/ebrahim-s-ebrahim/testradar</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/ebrahim-s-ebrahim/testradar.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="MinVer" Version="7.*" PrivateAssets="all" />
     <None Include="icon.png" Pack="true" PackagePath="" />
+    <None Include="..\README.md" Pack="true" PackagePath="" />
+    <None Include="..\LICENSE" Pack="true" PackagePath="" />
   </ItemGroup>
 
   <ItemGroup>
