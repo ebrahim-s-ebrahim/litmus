@@ -42,7 +42,15 @@ public partial class SolutionParser
 
         var solutionDirRelativeToGitRoot = Path.GetRelativePath(gitRoot, solutionDir);
 
-        var projectDirs = csprojPaths
+        // Filter out test projects (they reference Microsoft.NET.Test.Sdk or set IsTestProject)
+        var sourceCsprojPaths = csprojPaths
+            .Where(p => !IsTestProject(Path.Combine(solutionDir, NormalizePath(p))))
+            .ToList();
+
+        if (sourceCsprojPaths.Count == 0)
+            throw new InvalidOperationException("No non-test .csproj project entries found in the solution file.");
+
+        var projectDirs = sourceCsprojPaths
             .Select(p => NormalizePath(p))
             .Select(p => Path.GetDirectoryName(p) ?? "")
             .Where(d => !string.IsNullOrEmpty(d))
@@ -57,7 +65,7 @@ public partial class SolutionParser
             .ToList();
 
         // Handle projects at solution root (csproj in same dir as sln)
-        var rootProjects = csprojPaths
+        var rootProjects = sourceCsprojPaths
             .Where(p => !p.Contains('/') && !p.Contains('\\'))
             .ToList();
 
@@ -125,6 +133,24 @@ public partial class SolutionParser
             throw new InvalidOperationException("No .csproj project entries found in the .slnx file.");
 
         return paths;
+    }
+
+    private bool IsTestProject(string csprojPath)
+    {
+        if (!_fileSystem.FileExists(csprojPath))
+            return false;
+
+        var content = _fileSystem.ReadAllText(csprojPath);
+
+        // Check for explicit <IsTestProject>true</IsTestProject>
+        if (content.Contains("<IsTestProject>true</IsTestProject>", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        // Check for Microsoft.NET.Test.Sdk (the canonical marker for test projects)
+        if (content.Contains("Microsoft.NET.Test.Sdk", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return false;
     }
 
     private static string NormalizePath(string path)
