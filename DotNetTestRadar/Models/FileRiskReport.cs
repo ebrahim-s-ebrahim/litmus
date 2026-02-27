@@ -2,6 +2,7 @@ namespace DotNetTestRadar.Models;
 
 public class FileRiskReport
 {
+    // Phase 1 — Risk signals
     public required string File { get; set; }
     public int Commits { get; set; }
     public int WeightedChurn { get; set; }
@@ -11,4 +12,15 @@ public class FileRiskReport
     public double ComplexityNorm { get; set; }
     public double RiskScore { get; set; }
     public string RiskLevel { get; set; } = "Low";
+
+    // Phase 2 — Dependency & starting priority
+    public int InfrastructureCalls { get; set; }
+    public int DirectInstantiations { get; set; }
+    public int ConcreteConstructorParams { get; set; }
+    public int StaticCalls { get; set; }
+    public double RawDependencyScore { get; set; }
+    public double DependencyNorm { get; set; }
+    public string DependencyLevel { get; set; } = "Low";  // Low | Medium | High | Very High
+    public double StartingPriority { get; set; }
+    public string PriorityLevel { get; set; } = "Low";    // Low | Medium | High
 }

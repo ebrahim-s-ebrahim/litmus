@@ -9,12 +9,15 @@
     <ToolCommandName>dotnet-testradar</ToolCommandName>
     <PackageId>DotNetTestRadar</PackageId>
     <Description>
-      Identifies high-risk .NET source files by cross-referencing git churn,
-      code coverage, and cyclomatic complexity. Helps teams prioritize where
-      to add tests in legacy codebases.
+      Identifies high-risk .NET source files and ranks them by starting priority.
+      Phase 1 cross-references git churn, code coverage, and cyclomatic complexity
+      to produce a Risk Score. Phase 2 adds Roslyn-based seam analysis (unseamed
+      infrastructure calls, direct instantiation, concrete constructor parameters,
+      static calls) to compute a Starting Priority score — so teams know both
+      where tests are needed and where they can practically begin today.
     </Description>
     <Authors>Ebrahim S. Ebrahim</Authors>
-    <PackageTags>testing;coverage;legacy;dotnet-tool;unit-testing</PackageTags>
+    <PackageTags>testing;coverage;legacy;dotnet-tool;unit-testing;seams;testability</PackageTags>
     <PackageIcon>icon.png</PackageIcon>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>

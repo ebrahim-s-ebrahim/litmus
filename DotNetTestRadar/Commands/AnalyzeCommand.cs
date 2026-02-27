@@ -30,7 +30,7 @@ public class AnalyzeCommand
 
         var topOption = new Option<int>("--top")
         {
-            Description = "Number of top risky files to display",
+            Description = "Number of top files to display",
             DefaultValueFactory = _ => 20
         };
 
@@ -50,7 +50,12 @@ public class AnalyzeCommand
             Description = "Disable colored output"
         };
 
-        var command = new Command("analyze", "Analyze .NET solution for high-risk files")
+        var deepOption = new Option<bool>("--deep")
+        {
+            Description = "Use Roslyn semantic model for precise interface detection in Signal 3 (slower startup)"
+        };
+
+        var command = new Command("analyze", "Analyze .NET solution for high-risk files and starting priority")
         {
             solutionOption,
             coverageOption,
@@ -58,7 +63,8 @@ public class AnalyzeCommand
             topOption,
             excludeOption,
             outputOption,
-            noColorOption
+            noColorOption,
+            deepOption
         };
 
         command.SetAction(parseResult =>
@@ -71,7 +77,8 @@ public class AnalyzeCommand
                 Top = parseResult.GetValue(topOption),
                 ExcludePatterns = parseResult.GetValue(excludeOption)?.ToList() ?? [],
                 OutputPath = parseResult.GetValue(outputOption),
-                NoColor = parseResult.GetValue(noColorOption)
+                NoColor = parseResult.GetValue(noColorOption),
+                Deep = parseResult.GetValue(deepOption)
             };
 
             return Execute(options, fileSystem, processRunner);
@@ -168,12 +175,19 @@ public class AnalyzeCommand
                 parseResult.GitRoot,
                 parseResult.ProjectDirectories);
 
-            // Step 4: Risk scoring
+            // Step 4: Dependency analysis (Phase 2 — seam detection)
+            var dependencyAnalyzer = new DependencyAnalyzer(fileSystem);
+            var dependencyResult = dependencyAnalyzer.Analyze(
+                parseResult.GitRoot,
+                parseResult.ProjectDirectories);
+
+            // Step 5: Risk scoring + starting priority
             var riskScorer = new RiskScorer();
             var reports = riskScorer.Score(
                 churnResult,
                 coverageResult,
                 complexityResult,
+                dependencyResult,
                 parseResult.SolutionDirectory,
                 parseResult.GitRoot);
 
@@ -183,7 +197,7 @@ public class AnalyzeCommand
                 return 0;
             }
 
-            // Step 5: Render
+            // Step 6: Render
             var renderer = new ReportRenderer(fileSystem);
             renderer.Render(reports, options.Top, options.NoColor, options.OutputPath, complexityResult.SkippedFiles);
 
