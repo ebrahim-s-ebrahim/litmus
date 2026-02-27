@@ -133,6 +133,102 @@ public static class TestFixtures
         }
         """;
 
+    // Phase 2 — Dependency analysis fixtures
+
+    public static string CodeWithInfrastructureCalls => """
+        public class Service
+        {
+            public void DoWork()
+            {
+                var now = DateTime.Now;
+                var content = File.ReadAllText("path");
+                var client = new HttpClient();
+            }
+        }
+        """;
+
+    public static string CodeWithDirectInstantiations => """
+        public class Service
+        {
+            public void DoWork()
+            {
+                var repo = new UserRepository();
+                var svc = new EmailService();
+                var list = new List<int>();
+                var dto = new UserDto();
+            }
+        }
+        """;
+
+    public static string CodeWithConcreteConstructorParams => """
+        public class Service
+        {
+            private readonly UserRepository _repo;
+            private readonly ILogger<Service> _logger;
+
+            public Service(UserRepository repo, ILogger<Service> logger, string name)
+            {
+                _repo = repo;
+                _logger = logger;
+            }
+        }
+        """;
+
+    public static string CodeWithStaticCalls => """
+        public class Service
+        {
+            public void DoWork()
+            {
+                var result = MyHelper.Calculate(5);
+                var abs = Math.Abs(-1);
+                var converted = Convert.ToInt32("5");
+            }
+        }
+        """;
+
+    public static string CodeFullySeamed => """
+        public class OrderService
+        {
+            private readonly IOrderRepository _repo;
+            private readonly IDateTimeProvider _clock;
+
+            public OrderService(IOrderRepository repo, IDateTimeProvider clock)
+            {
+                _repo = repo;
+                _clock = clock;
+            }
+
+            public void Process()
+            {
+                var now = _clock.UtcNow;
+                var orders = _repo.GetAll();
+            }
+        }
+        """;
+
+    public static string CodeMaximallyEntangled => """
+        public class LegacySync
+        {
+            private readonly SqlConnection _conn;
+
+            public LegacySync(SqlConnection conn, UserRepository repo)
+            {
+                _conn = conn;
+            }
+
+            public void Sync()
+            {
+                var now = DateTime.Now;
+                var env = Environment.GetEnvironmentVariable("KEY");
+                var client = new HttpClient();
+                var parser = new XmlParser();
+                var id = Guid.NewGuid();
+                LegacyHelper.Transform(null);
+                CacheManager.Invalidate();
+            }
+        }
+        """;
+
     public static string ComplexCode => """
         using System;
 

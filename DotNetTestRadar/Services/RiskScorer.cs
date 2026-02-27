@@ -8,6 +8,7 @@ public class RiskScorer
         ChurnResult churn,
         CoverageResult coverage,
         ComplexityResult complexity,
+        DependencyResult dependency,
         string solutionDirectory,
         string gitRoot)
     {
@@ -36,7 +37,7 @@ public class RiskScorer
 
             var coverageRate = CoverageParser.GetCoverageForFile(coverage, file);
 
-            // Build git-root-relative path for complexity lookup
+            // Build git-root-relative path for complexity and dependency lookups
             var gitRootRelPath = file;
             if (solutionRelPath != ".")
                 gitRootRelPath = solutionRelPath + "/" + file;
@@ -44,8 +45,28 @@ public class RiskScorer
             var complexityNorm = complexity.FileComplexityNorm.GetValueOrDefault(gitRootRelPath, 0.0);
             var rawComplexity = complexity.FileComplexity.GetValueOrDefault(gitRootRelPath, 0);
 
+            // Phase 1: Risk score
             var riskScore = churnNorm * (1 - coverageRate) * (1 + complexityNorm);
             var riskLevel = riskScore switch
+            {
+                >= 0.6 => "High",
+                >= 0.2 => "Medium",
+                _ => "Low"
+            };
+
+            // Phase 2: Dependency score and starting priority
+            var depData = dependency.Files.GetValueOrDefault(gitRootRelPath);
+            var dependencyNorm = depData?.DependencyNorm ?? 0.0;
+
+            var startingPriority = riskScore * (1 - dependencyNorm);
+            var dependencyLevel = dependencyNorm switch
+            {
+                >= 0.75 => "Very High",
+                >= 0.50 => "High",
+                >= 0.25 => "Medium",
+                _ => "Low"
+            };
+            var priorityLevel = startingPriority switch
             {
                 >= 0.6 => "High",
                 >= 0.2 => "Medium",
@@ -62,10 +83,20 @@ public class RiskScorer
                 CyclomaticComplexity = rawComplexity,
                 ComplexityNorm = complexityNorm,
                 RiskScore = Math.Round(riskScore, 4),
-                RiskLevel = riskLevel
+                RiskLevel = riskLevel,
+                InfrastructureCalls = depData?.InfrastructureCalls ?? 0,
+                DirectInstantiations = depData?.DirectInstantiations ?? 0,
+                ConcreteConstructorParams = depData?.ConcreteConstructorParams ?? 0,
+                StaticCalls = depData?.StaticCalls ?? 0,
+                RawDependencyScore = depData?.RawDependencyScore ?? 0.0,
+                DependencyNorm = dependencyNorm,
+                DependencyLevel = dependencyLevel,
+                StartingPriority = Math.Round(startingPriority, 4),
+                PriorityLevel = priorityLevel
             });
         }
 
-        return reports.OrderByDescending(r => r.RiskScore).ToList();
+        // Sort by StartingPriority — the primary actionable output of the tool
+        return reports.OrderByDescending(r => r.StartingPriority).ToList();
     }
 }
