@@ -96,4 +96,99 @@ public class CoverageParserTests
 
         coverage.Should().Be(0.0);
     }
+
+    // -------------------------------------------------------------------------
+    // Merge — used by scan command when multiple test projects each produce a
+    // coverage.cobertura.xml
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public void Merge_EmptyInput_ReturnsEmptyResult()
+    {
+        var merged = CoverageParser.Merge([]);
+        merged.FileCoverage.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Merge_SingleResult_ReturnsItUnchanged()
+    {
+        var single = new CoverageResult
+        {
+            FileCoverage = new Dictionary<string, double>
+            {
+                ["Foo.cs"] = 0.75,
+                ["Bar.cs"] = 0.0
+            }
+        };
+
+        var merged = CoverageParser.Merge([single]);
+
+        merged.FileCoverage.Should().BeEquivalentTo(single.FileCoverage);
+    }
+
+    [Fact]
+    public void Merge_NonOverlappingResults_CombinesAll()
+    {
+        var a = new CoverageResult { FileCoverage = new() { ["A.cs"] = 0.5 } };
+        var b = new CoverageResult { FileCoverage = new() { ["B.cs"] = 0.8 } };
+
+        var merged = CoverageParser.Merge([a, b]);
+
+        merged.FileCoverage.Should().HaveCount(2);
+        merged.FileCoverage["A.cs"].Should().Be(0.5);
+        merged.FileCoverage["B.cs"].Should().Be(0.8);
+    }
+
+    [Fact]
+    public void Merge_OverlappingFiles_TakesHigherCoverage()
+    {
+        // TestProject1 covers Service.cs at 30%
+        var proj1 = new CoverageResult { FileCoverage = new() { ["Service.cs"] = 0.30 } };
+        // TestProject2 covers Service.cs at 80% — higher wins
+        var proj2 = new CoverageResult { FileCoverage = new() { ["Service.cs"] = 0.80 } };
+
+        var merged = CoverageParser.Merge([proj1, proj2]);
+
+        merged.FileCoverage["Service.cs"].Should().Be(0.80,
+            "the highest coverage across all test projects should win");
+    }
+
+    [Fact]
+    public void Merge_OverlappingFiles_LowerCoverageDoesNotOverride()
+    {
+        var high = new CoverageResult { FileCoverage = new() { ["Service.cs"] = 0.90 } };
+        var low  = new CoverageResult { FileCoverage = new() { ["Service.cs"] = 0.10 } };
+
+        var merged = CoverageParser.Merge([high, low]);
+
+        merged.FileCoverage["Service.cs"].Should().Be(0.90);
+    }
+
+    [Fact]
+    public void Merge_MultipleResults_CombinesAndDeduplicatesCorrectly()
+    {
+        var proj1 = new CoverageResult
+        {
+            FileCoverage = new()
+            {
+                ["Services/OrderService.cs"] = 0.20,
+                ["Models/Order.cs"] = 1.0
+            }
+        };
+        var proj2 = new CoverageResult
+        {
+            FileCoverage = new()
+            {
+                ["Services/OrderService.cs"] = 0.85,  // higher → wins
+                ["Controllers/OrderController.cs"] = 0.55
+            }
+        };
+
+        var merged = CoverageParser.Merge([proj1, proj2]);
+
+        merged.FileCoverage.Should().HaveCount(3);
+        merged.FileCoverage["Services/OrderService.cs"].Should().Be(0.85);
+        merged.FileCoverage["Models/Order.cs"].Should().Be(1.0);
+        merged.FileCoverage["Controllers/OrderController.cs"].Should().Be(0.55);
+    }
 }

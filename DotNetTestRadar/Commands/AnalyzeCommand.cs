@@ -89,40 +89,68 @@ public class AnalyzeCommand
 
     private static int Execute(AnalysisOptions options, IFileSystem fileSystem, IProcessRunner processRunner)
     {
+        // Validate solution file
+        if (!fileSystem.FileExists(options.SolutionPath))
+        {
+            AnsiConsole.MarkupLine("[red]Error:[/] Solution file not found: " + options.SolutionPath);
+            return 1;
+        }
+
+        var ext = Path.GetExtension(options.SolutionPath).ToLowerInvariant();
+        if (ext is not ".sln" and not ".slnx")
+        {
+            AnsiConsole.MarkupLine("[red]Error:[/] Solution file must be a .sln or .slnx file.");
+            return 1;
+        }
+
+        // Validate coverage file
+        if (!fileSystem.FileExists(options.CoveragePath))
+        {
+            AnsiConsole.MarkupLine("[red]Error:[/] Coverage file not found: " + options.CoveragePath);
+            return 1;
+        }
+
+        // Check git availability
         try
         {
-            // Validate solution file
-            if (!fileSystem.FileExists(options.SolutionPath))
-            {
-                AnsiConsole.MarkupLine("[red]Error:[/] Solution file not found: " + options.SolutionPath);
-                return 1;
-            }
+            processRunner.Run("git", "--version", ".");
+        }
+        catch
+        {
+            AnsiConsole.MarkupLine("[red]Error:[/] git must be installed and available on PATH.");
+            return 1;
+        }
 
-            var ext = Path.GetExtension(options.SolutionPath).ToLowerInvariant();
-            if (ext is not ".sln" and not ".slnx")
-            {
-                AnsiConsole.MarkupLine("[red]Error:[/] Solution file must be a .sln or .slnx file.");
-                return 1;
-            }
+        // Parse coverage from the provided file
+        var coverageParser = new CoverageParser(fileSystem);
+        CoverageResult coverageResult;
+        try
+        {
+            coverageResult = coverageParser.Parse(options.CoveragePath);
+        }
+        catch (InvalidOperationException ex)
+        {
+            AnsiConsole.MarkupLine($"[red]Error:[/] {ex.Message}");
+            return 1;
+        }
 
-            // Validate coverage file
-            if (!fileSystem.FileExists(options.CoveragePath))
-            {
-                AnsiConsole.MarkupLine("[red]Error:[/] Coverage file not found: " + options.CoveragePath);
-                return 1;
-            }
+        return RunAnalysis(options, coverageResult, fileSystem, processRunner);
+    }
 
-            // Check git availability
-            try
-            {
-                processRunner.Run("git", "--version", ".");
-            }
-            catch
-            {
-                AnsiConsole.MarkupLine("[red]Error:[/] git must be installed and available on PATH.");
-                return 1;
-            }
-
+    /// <summary>
+    /// Runs the core analysis pipeline (solution parsing → churn → complexity → dependency →
+    /// scoring → rendering) using an already-parsed coverage result. Called by both
+    /// <see cref="AnalyzeCommand"/> (coverage from file) and <see cref="ScanCommand"/>
+    /// (coverage auto-generated from dotnet test).
+    /// </summary>
+    internal static int RunAnalysis(
+        AnalysisOptions options,
+        CoverageResult coverageResult,
+        IFileSystem fileSystem,
+        IProcessRunner processRunner)
+    {
+        try
+        {
             // Step 0: Parse solution
             var solutionParser = new SolutionParser(fileSystem, processRunner);
             SolutionParseResult parseResult;
@@ -156,32 +184,19 @@ public class AnalyzeCommand
                 options.Since,
                 options.ExcludePatterns);
 
-            // Step 2: Coverage
-            var coverageParser = new CoverageParser(fileSystem);
-            CoverageResult coverageResult;
-            try
-            {
-                coverageResult = coverageParser.Parse(options.CoveragePath);
-            }
-            catch (InvalidOperationException ex)
-            {
-                AnsiConsole.MarkupLine($"[red]Error:[/] {ex.Message}");
-                return 1;
-            }
-
-            // Step 3: Complexity
+            // Step 2: Complexity
             var complexityAnalyzer = new ComplexityAnalyzer(fileSystem);
             var complexityResult = complexityAnalyzer.Analyze(
                 parseResult.GitRoot,
                 parseResult.ProjectDirectories);
 
-            // Step 4: Dependency analysis (Phase 2 — seam detection)
+            // Step 3: Dependency analysis (Phase 2 — seam detection)
             var dependencyAnalyzer = new DependencyAnalyzer(fileSystem);
             var dependencyResult = dependencyAnalyzer.Analyze(
                 parseResult.GitRoot,
                 parseResult.ProjectDirectories);
 
-            // Step 5: Risk scoring + starting priority
+            // Step 4: Risk scoring + starting priority
             var riskScorer = new RiskScorer();
             var reports = riskScorer.Score(
                 churnResult,
@@ -197,11 +212,11 @@ public class AnalyzeCommand
                 return 0;
             }
 
-            // Step 6: Render
+            // Step 5: Render
             var renderer = new ReportRenderer(fileSystem);
             renderer.Render(reports, options.Top, options.NoColor, options.OutputPath, complexityResult.SkippedFiles);
 
-            // Log files with no coverage data
+            // Warn about files that had no entry in the coverage report
             var filesWithNoCoverageEntry = reports
                 .Where(r => r.CoverageRate == 0.0 &&
                        !coverageResult.FileCoverage.Keys.Any(k =>

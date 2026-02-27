@@ -58,6 +58,25 @@ public class CoverageParser
         return result;
     }
 
+    /// <summary>
+    /// Merges multiple coverage results into one by taking the highest coverage rate
+    /// seen for each file across all results. Used when multiple test projects each
+    /// produce their own coverage.cobertura.xml.
+    /// </summary>
+    public static CoverageResult Merge(IEnumerable<CoverageResult> results)
+    {
+        var merged = new CoverageResult();
+        foreach (var result in results)
+        {
+            foreach (var (file, rate) in result.FileCoverage)
+            {
+                if (!merged.FileCoverage.TryGetValue(file, out var existing) || rate > existing)
+                    merged.FileCoverage[file] = rate;
+            }
+        }
+        return merged;
+    }
+
     public static double GetCoverageForFile(CoverageResult coverage, string fileRelativePath)
     {
         var normalizedTarget = fileRelativePath.Replace('\\', '/');

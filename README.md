@@ -42,22 +42,50 @@ dotnet tool install --global DotNetTestRadar
 dotnet run --project DotNetTestRadar -- analyze --solution path/to/YourApp.sln --coverage coverage.xml
 ```
 
-### Basic Usage
+### Two ways to run
+
+**Option A — One step with `scan` (recommended for getting started):**
 
 ```bash
-dotnet-testradar analyze --solution MyApp.sln --coverage coverage.cobertura.xml
+dotnet-testradar scan --solution MyApp.sln
 ```
 
-This will:
+This runs `dotnet test`, collects coverage automatically, then runs the full analysis. No need to generate a coverage file first.
 
-1. Parse the solution to discover project directories
-2. Query git history for file change frequency
-3. Parse the Cobertura coverage report
-4. Compute cyclomatic complexity via Roslyn
-5. Analyze dependency entanglement (seam detection) via Roslyn
-6. Produce a color-coded priority table in your terminal
+**Option B — Two steps with `analyze` (when you already have coverage):**
+
+```bash
+# Generate coverage separately (e.g. in CI)
+dotnet test --collect:"XPlat Code Coverage"
+
+# Then analyze
+dotnet-testradar analyze --solution MyApp.sln --coverage TestResults/.../coverage.cobertura.xml
+```
+
+### What `scan` does
+
+1. Runs `dotnet test` with the XPlat Code Coverage collector
+2. Discovers all `coverage.cobertura.xml` files produced (one per test project)
+3. Merges them (taking the highest coverage rate per source file)
+4. Runs the full analysis pipeline (git churn → complexity → seam detection → scoring)
+5. Cleans up the temporary test results directory
 
 ## CLI Options
+
+### `scan` — runs tests and analyzes in one step
+
+| Option | Required | Default | Description |
+|---|---|---|---|
+| `--solution` | Yes | -- | Path to a `.sln` or `.slnx` file |
+| `--tests-dir` | No | solution file | Directory or project to run `dotnet test` against |
+| `--since` | No | 1 year ago | Limit git history to commits after this date (ISO format) |
+| `--top` | No | 20 | Number of top files to display |
+| `--exclude` | No | -- | Glob pattern(s) to exclude files (repeatable) |
+| `--output` | No | -- | Export full results to a `.json` or `.csv` file |
+| `--no-color` | No | false | Disable colored output |
+| `--deep` | No | false | Use Roslyn semantic model for precise interface detection (slower startup) |
+
+### `analyze` — use an existing coverage file
 
 | Option | Required | Default | Description |
 |---|---|---|---|
@@ -72,17 +100,31 @@ This will:
 
 ## Examples
 
-### Analyze the last 6 months, show top 10
+### Quickest start — run tests and analyze in one command
 
 ```bash
-dotnet-testradar analyze \
+dotnet-testradar scan --solution MyApp.sln
+```
+
+### Scan with a specific test directory, export to JSON
+
+```bash
+dotnet-testradar scan \
+  --solution MyApp.sln \
+  --tests-dir tests/MyApp.Tests \
+  --output report.json
+```
+
+### Scan the last 6 months, show top 10
+
+```bash
+dotnet-testradar scan \
   --solution src/MyApp.sln \
-  --coverage TestResults/coverage.cobertura.xml \
   --since 2025-08-01 \
   --top 10
 ```
 
-### Exclude generated code and export to JSON
+### Analyze with an existing coverage file, exclude generated code
 
 ```bash
 dotnet-testradar analyze \
@@ -215,15 +257,23 @@ The following patterns are always excluded to reduce noise from auto-generated f
 
 Use `--exclude` to add additional patterns on top of these defaults.
 
-## Generating a Coverage Report
+## Coverage Prerequisites (for `analyze`)
 
-If you don't have a Cobertura XML file yet, here's how to produce one:
+The `scan` command handles coverage automatically. If you use `analyze` and need to generate a coverage file manually:
 
 ```bash
 dotnet test --collect:"XPlat Code Coverage"
 ```
 
-This creates a `coverage.cobertura.xml` file inside `TestResults/`. You can also use [ReportGenerator](https://github.com/danielpalme/ReportGenerator) to merge multiple coverage files before feeding them to testradar.
+This creates a `coverage.cobertura.xml` file inside `TestResults/`. For multiple test projects, use [ReportGenerator](https://github.com/danielpalme/ReportGenerator) to merge:
+
+```bash
+dotnet tool install -g dotnet-reportgenerator-globaltool
+reportgenerator -reports:"**/coverage.cobertura.xml" -targetdir:"merged" -reporttypes:Cobertura
+dotnet-testradar analyze --solution MyApp.sln --coverage merged/Cobertura.xml
+```
+
+The `scan` command does this merge automatically — it is generally the simpler option.
 
 ## Solution Format Support
 
@@ -233,7 +283,8 @@ The tool supports both classic `.sln` files and the newer `.slnx` XML-based form
 
 - .NET 10.0 or later
 - Git must be installed and the solution must reside inside a git repository
-- A Cobertura XML coverage report
+- `scan`: requires dotnet SDK with `coverlet.collector` in test projects
+- `analyze`: requires a pre-generated Cobertura XML coverage report
 
 ## License
 
