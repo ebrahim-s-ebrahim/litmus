@@ -192,7 +192,7 @@ public class RiskScorerTests
     [InlineData(0.6, 0.0, 0.0, 0.0, "High")]    // SP = 0.6 ≥ 0.6
     [InlineData(0.5, 0.0, 0.0, 0.0, "Medium")]  // SP = 0.5 ≥ 0.2
     [InlineData(0.1, 0.0, 0.0, 0.0, "Low")]     // SP = 0.1 < 0.2
-    [InlineData(1.0, 0.0, 0.0, 0.8, "Low")]     // SP = 1.0 × 0.2 = 0.2 → Medium? No, 0.2 is Medium boundary
+    [InlineData(1.0, 0.0, 0.0, 0.8, "Medium")]   // SP = 1.0 × (1-0.8) = 0.2 → >= 0.2 is Medium boundary
     public void Score_PriorityLevelClassifiesCorrectlyAtBoundaries(
         double churnNorm, double coverageRate, double complexityNorm, double depNorm, string expectedPriorityLevel)
     {

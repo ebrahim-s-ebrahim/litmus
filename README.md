@@ -83,7 +83,6 @@ dotnet-testradar analyze --solution MyApp.sln --coverage TestResults/.../coverag
 | `--exclude` | No | -- | Glob pattern(s) to exclude files (repeatable) |
 | `--output` | No | -- | Export full results to a `.json` or `.csv` file |
 | `--no-color` | No | false | Disable colored output |
-| `--deep` | No | false | Use Roslyn semantic model for precise interface detection (slower startup) |
 
 ### `analyze` — use an existing coverage file
 
@@ -96,7 +95,6 @@ dotnet-testradar analyze --solution MyApp.sln --coverage TestResults/.../coverag
 | `--exclude` | No | -- | Glob pattern(s) to exclude files (repeatable) |
 | `--output` | No | -- | Export full results to a `.json` or `.csv` file |
 | `--no-color` | No | false | Disable colored output |
-| `--deep` | No | false | Use Roslyn semantic model for precise interface detection (slower startup) |
 
 ## Examples
 
@@ -240,10 +238,6 @@ StartingPriority = RiskScore × (1 - DependencyNorm)
 `DependencyNorm = 1` (maximally entangled) → `StartingPriority = 0`.
 
 The two scores are kept separate intentionally: a file can be High Risk but Low Starting Priority. That combination is one of the most valuable signals in the output — it means *"this file is dangerous but needs seam introduction before you can test it."*
-
-### The `--deep` Flag
-
-By default, Signal 3 (concrete constructor parameters) uses the `ITypeName` naming convention — fast and accurate for the vast majority of .NET codebases. With `--deep`, the tool will use Roslyn's semantic model for higher precision (e.g., interfaces not following the convention, system namespace exclusions). This trades slower startup for greater accuracy and is opt-in.
 
 ## Default Exclusions
 

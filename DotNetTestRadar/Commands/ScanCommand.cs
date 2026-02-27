@@ -49,11 +49,6 @@ public class ScanCommand
             Description = "Disable colored output"
         };
 
-        var deepOption = new Option<bool>("--deep")
-        {
-            Description = "Use Roslyn semantic model for precise interface detection in Signal 3 (slower startup)"
-        };
-
         var command = new Command(
             "scan",
             "Run dotnet test, collect code coverage, and analyze the solution in one step")
@@ -64,8 +59,7 @@ public class ScanCommand
             topOption,
             excludeOption,
             outputOption,
-            noColorOption,
-            deepOption
+            noColorOption
         };
 
         command.SetAction(parseResult =>
@@ -78,8 +72,7 @@ public class ScanCommand
                 Top = parseResult.GetValue(topOption),
                 ExcludePatterns = parseResult.GetValue(excludeOption)?.ToList() ?? [],
                 OutputPath = parseResult.GetValue(outputOption),
-                NoColor = parseResult.GetValue(noColorOption),
-                Deep = parseResult.GetValue(deepOption)
+                NoColor = parseResult.GetValue(noColorOption)
             };
 
             var testsDir = parseResult.GetValue(testsDirOption);

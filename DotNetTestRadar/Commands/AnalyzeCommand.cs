@@ -50,11 +50,6 @@ public class AnalyzeCommand
             Description = "Disable colored output"
         };
 
-        var deepOption = new Option<bool>("--deep")
-        {
-            Description = "Use Roslyn semantic model for precise interface detection in Signal 3 (slower startup)"
-        };
-
         var command = new Command("analyze", "Analyze .NET solution for high-risk files and starting priority")
         {
             solutionOption,
@@ -63,8 +58,7 @@ public class AnalyzeCommand
             topOption,
             excludeOption,
             outputOption,
-            noColorOption,
-            deepOption
+            noColorOption
         };
 
         command.SetAction(parseResult =>
@@ -77,8 +71,7 @@ public class AnalyzeCommand
                 Top = parseResult.GetValue(topOption),
                 ExcludePatterns = parseResult.GetValue(excludeOption)?.ToList() ?? [],
                 OutputPath = parseResult.GetValue(outputOption),
-                NoColor = parseResult.GetValue(noColorOption),
-                Deep = parseResult.GetValue(deepOption)
+                NoColor = parseResult.GetValue(noColorOption)
             };
 
             return Execute(options, fileSystem, processRunner);
@@ -219,7 +212,8 @@ public class AnalyzeCommand
 
             // Step 5: Render
             var renderer = new ReportRenderer(fileSystem);
-            renderer.Render(reports, options.Top, options.NoColor, options.OutputPath, complexityResult.SkippedFiles);
+            var totalSkippedFiles = complexityResult.SkippedFiles + dependencyResult.SkippedFiles;
+            renderer.Render(reports, options.Top, options.NoColor, options.OutputPath, totalSkippedFiles);
 
             // Warn about files that had no entry in the coverage report
             var filesWithNoCoverageEntry = reports

@@ -45,8 +45,8 @@ public class RiskScorer
             var complexityNorm = complexity.FileComplexityNorm.GetValueOrDefault(gitRootRelPath, 0.0);
             var rawComplexity = complexity.FileComplexity.GetValueOrDefault(gitRootRelPath, 0);
 
-            // Phase 1: Risk score
-            var riskScore = churnNorm * (1 - coverageRate) * (1 + complexityNorm);
+            // Phase 1: Risk score (round to avoid floating-point boundary misclassification)
+            var riskScore = Math.Round(churnNorm * (1 - coverageRate) * (1 + complexityNorm), 4);
             var riskLevel = riskScore switch
             {
                 >= 0.6 => "High",
@@ -58,7 +58,7 @@ public class RiskScorer
             var depData = dependency.Files.GetValueOrDefault(gitRootRelPath);
             var dependencyNorm = depData?.DependencyNorm ?? 0.0;
 
-            var startingPriority = riskScore * (1 - dependencyNorm);
+            var startingPriority = Math.Round(riskScore * (1 - dependencyNorm), 4);
             var dependencyLevel = dependencyNorm switch
             {
                 >= 0.75 => "Very High",
@@ -82,7 +82,7 @@ public class RiskScorer
                 CoverageRate = coverageRate,
                 CyclomaticComplexity = rawComplexity,
                 ComplexityNorm = complexityNorm,
-                RiskScore = Math.Round(riskScore, 4),
+                RiskScore = riskScore,
                 RiskLevel = riskLevel,
                 InfrastructureCalls = depData?.InfrastructureCalls ?? 0,
                 DirectInstantiations = depData?.DirectInstantiations ?? 0,
@@ -91,7 +91,7 @@ public class RiskScorer
                 RawDependencyScore = depData?.RawDependencyScore ?? 0.0,
                 DependencyNorm = dependencyNorm,
                 DependencyLevel = dependencyLevel,
-                StartingPriority = Math.Round(startingPriority, 4),
+                StartingPriority = startingPriority,
                 PriorityLevel = priorityLevel
             });
         }

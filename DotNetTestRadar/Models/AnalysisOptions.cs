@@ -9,7 +9,6 @@ public class AnalysisOptions
     public List<string> ExcludePatterns { get; set; } = [];
     public string? OutputPath { get; set; }
     public bool NoColor { get; set; }
-    public bool Deep { get; set; }
 
     public static readonly string[] DefaultExclusions =
     [
