@@ -21,7 +21,7 @@ public class ComplexityAnalyzer
         _fileSystem = fileSystem;
     }
 
-    public ComplexityResult Analyze(string gitRoot, List<string> projectDirectories)
+    public ComplexityResult Analyze(string gitRoot, List<string> projectDirectories, List<string> excludePatterns)
     {
         var result = new ComplexityResult();
 
@@ -36,9 +36,12 @@ public class ComplexityAnalyzer
             {
                 try
                 {
+                    var relativePath = Path.GetRelativePath(gitRoot, file).Replace('\\', '/');
+                    if (FileFilterHelper.MatchesAnyPattern(relativePath, excludePatterns))
+                        continue;
+
                     var content = _fileSystem.ReadAllText(file);
                     var complexity = CalculateFileComplexity(content);
-                    var relativePath = Path.GetRelativePath(gitRoot, file).Replace('\\', '/');
                     result.FileComplexity[relativePath] = complexity;
                 }
                 catch

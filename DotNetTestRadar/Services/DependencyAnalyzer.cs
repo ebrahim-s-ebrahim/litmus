@@ -101,7 +101,7 @@ public class DependencyAnalyzer
         _fileSystem = fileSystem;
     }
 
-    public DependencyResult Analyze(string gitRoot, List<string> projectDirectories)
+    public DependencyResult Analyze(string gitRoot, List<string> projectDirectories, List<string> excludePatterns)
     {
         var result = new DependencyResult();
 
@@ -116,9 +116,12 @@ public class DependencyAnalyzer
             {
                 try
                 {
+                    var relativePath = Path.GetRelativePath(gitRoot, file).Replace('\\', '/');
+                    if (FileFilterHelper.MatchesAnyPattern(relativePath, excludePatterns))
+                        continue;
+
                     var content = _fileSystem.ReadAllText(file);
                     var data = AnalyzeFile(content);
-                    var relativePath = Path.GetRelativePath(gitRoot, file).Replace('\\', '/');
                     result.Files[relativePath] = data;
                 }
                 catch

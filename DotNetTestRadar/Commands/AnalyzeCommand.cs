@@ -175,6 +175,9 @@ public class AnalyzeCommand
                 return 0;
             }
 
+            // Compute effective exclusion patterns once for all analyzers
+            var effectivePatterns = FileFilterHelper.GetEffectivePatterns(options.ExcludePatterns);
+
             // Step 1: Git churn
             var churnAnalyzer = new GitChurnAnalyzer(processRunner);
             var churnResult = churnAnalyzer.Analyze(
@@ -188,13 +191,15 @@ public class AnalyzeCommand
             var complexityAnalyzer = new ComplexityAnalyzer(fileSystem);
             var complexityResult = complexityAnalyzer.Analyze(
                 parseResult.GitRoot,
-                parseResult.ProjectDirectories);
+                parseResult.ProjectDirectories,
+                effectivePatterns);
 
             // Step 3: Dependency analysis (Phase 2 — seam detection)
             var dependencyAnalyzer = new DependencyAnalyzer(fileSystem);
             var dependencyResult = dependencyAnalyzer.Analyze(
                 parseResult.GitRoot,
-                parseResult.ProjectDirectories);
+                parseResult.ProjectDirectories,
+                effectivePatterns);
 
             // Step 4: Risk scoring + starting priority
             var riskScorer = new RiskScorer();

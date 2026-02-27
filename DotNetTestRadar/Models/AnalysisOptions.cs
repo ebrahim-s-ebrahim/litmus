@@ -13,11 +13,24 @@ public class AnalysisOptions
 
     public static readonly string[] DefaultExclusions =
     [
+        // Build output
+        "**/obj/**",
+        "**/bin/**",
+        // Auto-generated
         "*.Designer.cs",
         "*.g.cs",
         "*.g.i.cs",
-        "*Migrations/*.cs",
+        "*.generated.cs",
+        "*.xaml.cs",
         "*AssemblyInfo.cs",
-        "*.xaml.cs"
+        "*GlobalUsings.g.cs",
+        // Migrations
+        "**/Migrations/*.cs",
+        "*ModelSnapshot.cs",
+        // Entry points / bootstrapping
+        "Program.cs",
+        "Startup.cs",
+        // Static web assets
+        "**/wwwroot/**"
     ];
 }

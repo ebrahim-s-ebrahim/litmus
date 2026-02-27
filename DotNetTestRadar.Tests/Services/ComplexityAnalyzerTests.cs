@@ -108,7 +108,7 @@ public class ComplexityAnalyzerTests
         _fileSystem.ReadAllText(simpleFile).Returns(TestFixtures.NoBranchCode);
         _fileSystem.ReadAllText(complexFile).Returns(TestFixtures.ComplexCode);
 
-        var result = _sut.Analyze("/repo", projectDirs);
+        var result = _sut.Analyze("/repo", projectDirs, []);
 
         result.FileComplexityNorm.Values.Max().Should().Be(1.0);
     }
@@ -127,7 +127,7 @@ public class ComplexityAnalyzerTests
         _fileSystem.ReadAllText(goodFile).Returns(TestFixtures.NoBranchCode);
         _fileSystem.ReadAllText(badFile).Throws(new IOException("encoding issue"));
 
-        var result = _sut.Analyze("/repo", projectDirs);
+        var result = _sut.Analyze("/repo", projectDirs, []);
 
         result.SkippedFiles.Should().Be(1);
         result.FileComplexity.Should().HaveCount(1);
@@ -146,7 +146,7 @@ public class ComplexityAnalyzerTests
             .Returns([serviceFile]);
         _fileSystem.ReadAllText(serviceFile).Returns(TestFixtures.NoBranchCode);
 
-        var result = _sut.Analyze("/repo", projectDirs);
+        var result = _sut.Analyze("/repo", projectDirs, []);
 
         result.FileComplexity.Should().HaveCount(1);
         _fileSystem.DidNotReceive().GetFiles("/repo", Arg.Any<string>(), Arg.Any<bool>());

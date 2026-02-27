@@ -411,7 +411,7 @@ public class DependencyAnalyzerTests
         fs.ReadAllText("/repo/proj/Seamed.cs").Returns(TestFixtures.CodeFullySeamed);
 
         var analyzer = new DependencyAnalyzer(fs);
-        var result = analyzer.Analyze("/repo", ["proj"]);
+        var result = analyzer.Analyze("/repo", ["proj"], []);
 
         var entangled = result.Files["proj/Entangled.cs"];
         var seamed = result.Files["proj/Seamed.cs"];
@@ -430,7 +430,7 @@ public class DependencyAnalyzerTests
         fs.ReadAllText(Arg.Any<string>()).Returns(TestFixtures.CodeFullySeamed);
 
         var analyzer = new DependencyAnalyzer(fs);
-        var result = analyzer.Analyze("/repo", ["proj"]);
+        var result = analyzer.Analyze("/repo", ["proj"], []);
 
         result.Files.Values.Should().AllSatisfy(f => f.DependencyNorm.Should().Be(0.0));
     }
@@ -444,7 +444,7 @@ public class DependencyAnalyzerTests
         fs.ReadAllText("/repo/proj/Bad.cs").Throws(new IOException("disk error"));
 
         var analyzer = new DependencyAnalyzer(fs);
-        var result = analyzer.Analyze("/repo", ["proj"]);
+        var result = analyzer.Analyze("/repo", ["proj"], []);
 
         result.SkippedFiles.Should().Be(1);
         result.Files.Should().BeEmpty();
@@ -460,7 +460,7 @@ public class DependencyAnalyzerTests
         fs.ReadAllText(Arg.Any<string>()).Returns(TestFixtures.NoBranchCode);
 
         var analyzer = new DependencyAnalyzer(fs);
-        var result = analyzer.Analyze("/repo", ["src/MyApp"]);
+        var result = analyzer.Analyze("/repo", ["src/MyApp"], []);
 
         result.Files.Keys.Should().ContainSingle()
             .Which.Should().Be("src/MyApp/Services/UserService.cs");

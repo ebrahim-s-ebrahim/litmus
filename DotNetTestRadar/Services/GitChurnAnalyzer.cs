@@ -1,6 +1,4 @@
-using System.Text.RegularExpressions;
 using DotNetTestRadar.Abstractions;
-using DotNetTestRadar.Models;
 
 namespace DotNetTestRadar.Services;
 
@@ -32,7 +30,7 @@ public partial class GitChurnAnalyzer
         DateTime since,
         List<string> excludePatterns)
     {
-        var allPatterns = AnalysisOptions.DefaultExclusions.Concat(excludePatterns).ToList();
+        var allPatterns = FileFilterHelper.GetEffectivePatterns(excludePatterns);
 
         var pathspecs = projectDirectories
             .Select(d => $"\"{d}/**/*.cs\"")
@@ -95,7 +93,7 @@ public partial class GitChurnAnalyzer
             }
 
             // Apply exclusion patterns
-            if (MatchesAnyPattern(relPath, excludePatterns))
+            if (FileFilterHelper.MatchesAnyPattern(relPath, excludePatterns))
                 continue;
 
             if (!result.Files.TryGetValue(relPath, out var data))
@@ -121,28 +119,4 @@ public partial class GitChurnAnalyzer
         return result;
     }
 
-    private static bool MatchesAnyPattern(string filePath, List<string> patterns)
-    {
-        var fileName = Path.GetFileName(filePath);
-        var normalizedPath = filePath.Replace('\\', '/');
-        foreach (var pattern in patterns)
-        {
-            if (MatchGlob(normalizedPath, pattern) || MatchGlob(fileName, pattern))
-                return true;
-        }
-        return false;
-    }
-
-    private static bool MatchGlob(string input, string pattern)
-    {
-        // Convert glob to regex
-        // First handle ** (match anything including path separators)
-        // Then handle * (match anything including path separators for simple globs)
-        var regexPattern = "^" + Regex.Escape(pattern)
-            .Replace("\\*\\*", "<<DOUBLESTAR>>")
-            .Replace("\\*", ".*")
-            .Replace("<<DOUBLESTAR>>", ".*")
-            .Replace("\\?", ".") + "$";
-        return Regex.IsMatch(input, regexPattern, RegexOptions.IgnoreCase);
-    }
 }
