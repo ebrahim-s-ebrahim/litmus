@@ -56,6 +56,13 @@ public class AnalyzeCommand
             Description = "Disable colored output"
         };
 
+        var formatOption = new Option<string>("--format")
+        {
+            Description = "Output format for stdout: table, json, or csv",
+            DefaultValueFactory = _ => "table"
+        };
+        formatOption.AcceptOnlyFromAmong("table", "json", "csv");
+
         var command = new Command("analyze", "Analyze .NET solution for high-risk files and starting priority")
         {
             solutionOption,
@@ -65,7 +72,8 @@ public class AnalyzeCommand
             excludeOption,
             outputOption,
             baselineOption,
-            noColorOption
+            noColorOption,
+            formatOption
         };
 
         command.SetAction(parseResult =>
@@ -79,7 +87,8 @@ public class AnalyzeCommand
                 ExcludePatterns = parseResult.GetValue(excludeOption)?.ToList() ?? [],
                 OutputPath = parseResult.GetValue(outputOption),
                 BaselinePath = parseResult.GetValue(baselineOption),
-                NoColor = parseResult.GetValue(noColorOption)
+                NoColor = parseResult.GetValue(noColorOption),
+                Format = parseResult.GetValue(formatOption)!
             };
 
             return Execute(options, fileSystem, processRunner);
@@ -253,7 +262,7 @@ public class AnalyzeCommand
             // Step 5: Render
             var renderer = new ReportRenderer(fileSystem);
             var totalSkippedFiles = complexityResult.SkippedFiles + dependencyResult.SkippedFiles;
-            renderer.Render(reports, options.Top, options.NoColor, options.OutputPath, totalSkippedFiles, baseline);
+            renderer.Render(reports, options.Top, options.NoColor, options.OutputPath, totalSkippedFiles, baseline, options.Format);
 
             // Warn about files that had no entry in the coverage report
             var filesWithNoCoverageEntry = reports

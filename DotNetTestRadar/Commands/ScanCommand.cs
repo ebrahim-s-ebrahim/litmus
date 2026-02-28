@@ -54,6 +54,13 @@ public class ScanCommand
             Description = "Disable colored output"
         };
 
+        var formatOption = new Option<string>("--format")
+        {
+            Description = "Output format for stdout: table, json, or csv",
+            DefaultValueFactory = _ => "table"
+        };
+        formatOption.AcceptOnlyFromAmong("table", "json", "csv");
+
         var command = new Command(
             "scan",
             "Run dotnet test, collect code coverage, and analyze the solution in one step")
@@ -65,7 +72,8 @@ public class ScanCommand
             excludeOption,
             outputOption,
             baselineOption,
-            noColorOption
+            noColorOption,
+            formatOption
         };
 
         command.SetAction(parseResult =>
@@ -79,7 +87,8 @@ public class ScanCommand
                 ExcludePatterns = parseResult.GetValue(excludeOption)?.ToList() ?? [],
                 OutputPath = parseResult.GetValue(outputOption),
                 BaselinePath = parseResult.GetValue(baselineOption),
-                NoColor = parseResult.GetValue(noColorOption)
+                NoColor = parseResult.GetValue(noColorOption),
+                Format = parseResult.GetValue(formatOption)!
             };
 
             var testsDir = parseResult.GetValue(testsDirOption);

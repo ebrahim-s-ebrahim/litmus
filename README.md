@@ -83,6 +83,7 @@ dotnet-testradar analyze --solution MyApp.sln --coverage TestResults/.../coverag
 | `--exclude` | No | -- | Glob pattern(s) to exclude files (repeatable) |
 | `--output` | No | -- | Export full results to a `.json` or `.csv` file |
 | `--baseline` | No | -- | Path to a previous JSON export to compare against |
+| `--format` | No | table | Output format for stdout: `table`, `json`, or `csv` |
 | `--no-color` | No | false | Disable colored output |
 
 ### `analyze` — use an existing coverage file
@@ -96,6 +97,7 @@ dotnet-testradar analyze --solution MyApp.sln --coverage TestResults/.../coverag
 | `--exclude` | No | -- | Glob pattern(s) to exclude files (repeatable) |
 | `--output` | No | -- | Export full results to a `.json` or `.csv` file |
 | `--baseline` | No | -- | Path to a previous JSON export to compare against |
+| `--format` | No | table | Output format for stdout: `table`, `json`, or `csv` |
 | `--no-color` | No | false | Disable colored output |
 
 ## Examples
@@ -152,6 +154,22 @@ dotnet-testradar analyze \
 ```
 
 When `--baseline` is provided, a **Delta** column appears in the table showing how each file's Starting Priority changed (`+0.15` = degraded, `-0.10` = improved, `NEW` = not in baseline). A summary line reports: `vs baseline: N improved, N degraded, N new, N removed.`
+
+### Pipe JSON to jq or other tools
+
+```bash
+# Get the top 5 files as JSON and filter with jq
+dotnet-testradar analyze \
+  --solution MyApp.sln \
+  --coverage coverage.xml \
+  --format json | jq '.[].file'
+
+# Export CSV to stdout for further processing
+dotnet-testradar analyze \
+  --solution MyApp.sln \
+  --coverage coverage.xml \
+  --format csv > results.csv
+```
 
 ### Pipe-friendly plain output
 

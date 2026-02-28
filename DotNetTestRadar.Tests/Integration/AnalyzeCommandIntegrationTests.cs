@@ -207,6 +207,84 @@ public class AnalyzeCommandIntegrationTests : IDisposable
     }
 
     [Fact]
+    public async Task FormatJson_WritesJsonToStdout()
+    {
+        var options = new AnalysisOptions
+        {
+            SolutionPath = _fixture.SolutionPath,
+            CoveragePath = _fixture.CoveragePath,
+            Since = DateTime.Today.AddYears(-1),
+            Top = 20,
+            NoColor = true,
+            Format = "json"
+        };
+
+        // Capture stdout
+        var originalOut = Console.Out;
+        string captured;
+        try
+        {
+            using var sw = new StringWriter();
+            Console.SetOut(sw);
+
+            var exitCode = await RunAnalysis(options);
+            exitCode.Should().Be(0);
+
+            captured = sw.ToString();
+        }
+        finally
+        {
+            Console.SetOut(originalOut);
+        }
+
+        // Should be valid JSON with all 3 source files
+        var results = JsonSerializer.Deserialize<List<JsonElement>>(captured)!;
+        results.Should().HaveCount(3);
+
+        // Verify expected fields
+        var first = results[0];
+        first.TryGetProperty("file", out _).Should().BeTrue();
+        first.TryGetProperty("startingPriority", out _).Should().BeTrue();
+        first.TryGetProperty("riskScore", out _).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task FormatCsv_WritesCsvToStdout()
+    {
+        var options = new AnalysisOptions
+        {
+            SolutionPath = _fixture.SolutionPath,
+            CoveragePath = _fixture.CoveragePath,
+            Since = DateTime.Today.AddYears(-1),
+            Top = 20,
+            NoColor = true,
+            Format = "csv"
+        };
+
+        var originalOut = Console.Out;
+        string captured;
+        try
+        {
+            using var sw = new StringWriter();
+            Console.SetOut(sw);
+
+            var exitCode = await RunAnalysis(options);
+            exitCode.Should().Be(0);
+
+            captured = sw.ToString();
+        }
+        finally
+        {
+            Console.SetOut(originalOut);
+        }
+
+        var lines = captured.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
+        lines.Length.Should().Be(4); // header + 3 data rows
+        lines[0].Should().StartWith("file,");
+        lines[0].Split(',').Should().HaveCount(16);
+    }
+
+    [Fact]
     public async Task Baseline_ComparesAgainstPreviousRun()
     {
         // First run: generate baseline JSON

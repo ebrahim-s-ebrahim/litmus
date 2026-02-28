@@ -1,6 +1,9 @@
+using System.Text.Json;
+using DotNetTestRadar.Abstractions;
 using DotNetTestRadar.Models;
 using DotNetTestRadar.Output;
 using FluentAssertions;
+using NSubstitute;
 
 namespace DotNetTestRadar.Tests.Services;
 
@@ -156,5 +159,91 @@ public class ReportRendererTests
         var lines = csv.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
 
         lines[1].Should().EndWith(",NEW");
+    }
+
+    [Fact]
+    public void Render_FormatJson_WritesJsonToStdout()
+    {
+        var reports = new List<FileRiskReport>
+        {
+            MakeReport("A.cs", 0.8),
+            MakeReport("B.cs", 0.3)
+        };
+
+        var renderer = new ReportRenderer(Substitute.For<IFileSystem>());
+        var captured = CaptureConsoleOut(() =>
+            renderer.Render(reports, 20, noColor: true, outputPath: null, skippedFiles: 0, format: "json"));
+
+        // Should be valid JSON array
+        var parsed = JsonSerializer.Deserialize<List<JsonElement>>(captured);
+        parsed.Should().HaveCount(2);
+        parsed![0].GetProperty("file").GetString().Should().Be("A.cs");
+    }
+
+    [Fact]
+    public void Render_FormatCsv_WritesCsvToStdout()
+    {
+        var reports = new List<FileRiskReport>
+        {
+            MakeReport("A.cs", 0.8),
+            MakeReport("B.cs", 0.3)
+        };
+
+        var renderer = new ReportRenderer(Substitute.For<IFileSystem>());
+        var captured = CaptureConsoleOut(() =>
+            renderer.Render(reports, 20, noColor: true, outputPath: null, skippedFiles: 0, format: "csv"));
+
+        var lines = captured.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
+        lines.Length.Should().Be(3); // header + 2 data rows
+        lines[0].Should().StartWith("file,");
+    }
+
+    [Fact]
+    public void Render_FormatJson_WithBaseline_IncludesDelta()
+    {
+        var reports = new List<FileRiskReport> { MakeReport("A.cs", 0.8) };
+        var baseline = new Dictionary<string, double> { ["A.cs"] = 0.3 };
+
+        var renderer = new ReportRenderer(Substitute.For<IFileSystem>());
+        var captured = CaptureConsoleOut(() =>
+            renderer.Render(reports, 20, noColor: true, outputPath: null, skippedFiles: 0,
+                baseline: baseline, format: "json"));
+
+        captured.Should().Contain("\"delta\"");
+    }
+
+    [Fact]
+    public void Render_FormatJson_OutputsAllReports_NotJustTop()
+    {
+        var reports = new List<FileRiskReport>
+        {
+            MakeReport("A.cs", 0.9),
+            MakeReport("B.cs", 0.7),
+            MakeReport("C.cs", 0.5)
+        };
+
+        var renderer = new ReportRenderer(Substitute.For<IFileSystem>());
+        var captured = CaptureConsoleOut(() =>
+            renderer.Render(reports, top: 2, noColor: true, outputPath: null, skippedFiles: 0, format: "json"));
+
+        // JSON format should include all reports, not just top N
+        var parsed = JsonSerializer.Deserialize<List<JsonElement>>(captured);
+        parsed.Should().HaveCount(3);
+    }
+
+    private static string CaptureConsoleOut(Action action)
+    {
+        var original = Console.Out;
+        try
+        {
+            using var sw = new StringWriter();
+            Console.SetOut(sw);
+            action();
+            return sw.ToString();
+        }
+        finally
+        {
+            Console.SetOut(original);
+        }
     }
 }

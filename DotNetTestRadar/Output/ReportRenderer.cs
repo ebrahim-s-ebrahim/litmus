@@ -17,8 +17,23 @@ public class ReportRenderer
     }
 
     public void Render(List<FileRiskReport> reports, int top, bool noColor, string? outputPath, int skippedFiles,
-        Dictionary<string, double>? baseline = null)
+        Dictionary<string, double>? baseline = null, string format = "table")
     {
+        // Structured stdout formats: write JSON or CSV to Console.Out and skip the table
+        if (format is "json" or "csv")
+        {
+            var content = format == "json"
+                ? ExportJson(reports, baseline)
+                : ExportCsv(reports, baseline);
+            Console.Out.Write(content);
+
+            // Still export to file if --output was also provided
+            if (outputPath != null)
+                ExportResults(reports, outputPath, baseline);
+
+            return;
+        }
+
         var topReports = reports.Take(top).ToList();
         var hasBaseline = baseline != null;
 

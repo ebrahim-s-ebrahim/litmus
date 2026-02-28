@@ -10,6 +10,7 @@ public class AnalysisOptions
     public string? OutputPath { get; set; }
     public string? BaselinePath { get; set; }
     public bool NoColor { get; set; }
+    public string Format { get; set; } = "table";
 
     public static readonly string[] DefaultExclusions =
     [
