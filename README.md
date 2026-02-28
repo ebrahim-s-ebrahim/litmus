@@ -84,6 +84,8 @@ dotnet-testradar analyze --solution MyApp.sln --coverage TestResults/.../coverag
 | `--output` | No | -- | Export full results to a `.json` or `.csv` file |
 | `--baseline` | No | -- | Path to a previous JSON export to compare against |
 | `--format` | No | table | Output format for stdout: `table`, `json`, or `csv` |
+| `--verbose` | No | false | Show detailed intermediate scores for each file |
+| `--quiet` | No | false | Suppress all output except errors (exit code only) |
 | `--no-color` | No | false | Disable colored output |
 
 ### `analyze` — use an existing coverage file
@@ -98,6 +100,8 @@ dotnet-testradar analyze --solution MyApp.sln --coverage TestResults/.../coverag
 | `--output` | No | -- | Export full results to a `.json` or `.csv` file |
 | `--baseline` | No | -- | Path to a previous JSON export to compare against |
 | `--format` | No | table | Output format for stdout: `table`, `json`, or `csv` |
+| `--verbose` | No | false | Show detailed intermediate scores for each file |
+| `--quiet` | No | false | Suppress all output except errors (exit code only) |
 | `--no-color` | No | false | Disable colored output |
 
 ## Examples
@@ -254,7 +258,7 @@ Range: 0 to 2.0. A file that changes constantly, has no tests, and is highly com
 
 ### Phase 2 — Dependency Score and Starting Priority
 
-The dependency score measures how many **unseamed dependencies** a file has — things a test cannot substitute, control, or observe. Four signals are detected using Roslyn syntax analysis:
+The dependency score measures how many **unseamed dependencies** a file has — things a test cannot substitute, control, or observe. Six signals are detected using Roslyn syntax analysis:
 
 | Signal | Weight | What it detects |
 |---|---|---|
@@ -262,10 +266,15 @@ The dependency score measures how many **unseamed dependencies** a file has — 
 | **Direct instantiation in methods** | 1.5 | `new ConcreteType()` inside a method body (excluding DTOs, exceptions, collections) |
 | **Concrete constructor parameters** | 0.5 | Constructor parameters that do not follow the `ITypeName` interface convention |
 | **Static calls on non-utility types** | 1.0 | `MyHelper.Transform()`, `CacheManager.Invalidate()` (excluding `Math`, `Convert`, `Enumerable`, etc.) |
+| **Async seam calls** | 1.5 | `await _httpClient.GetAsync()`, `await _db.SaveChangesAsync()`, and other known async I/O methods |
+| **Concrete downcasts** | 1.0 | `(ConcreteType)expr` and `expr as ConcreteType` — defeats interface abstractions |
+
+**DI registration files** (`Program.cs`, `Startup.cs`, files calling `AddScoped`/`AddSingleton`/`AddTransient`) are automatically detected and given a zeroed dependency score, since their high coupling is expected.
 
 ```
 RawDependencyScore = (InfrastructureCalls × 2.0) + (DirectInstantiations × 1.5)
                    + (ConcreteConstructorParams × 0.5) + (StaticCalls × 1.0)
+                   + (AsyncSeamCalls × 1.5) + (ConcreteCasts × 1.0)
 
 DependencyNorm = RawDependencyScore / Max(RawDependencyScore across all files)
 

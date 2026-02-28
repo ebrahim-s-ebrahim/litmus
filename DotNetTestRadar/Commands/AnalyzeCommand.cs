@@ -63,6 +63,16 @@ public class AnalyzeCommand
         };
         formatOption.AcceptOnlyFromAmong("table", "json", "csv");
 
+        var verboseOption = new Option<bool>("--verbose")
+        {
+            Description = "Show detailed intermediate scores for each file"
+        };
+
+        var quietOption = new Option<bool>("--quiet")
+        {
+            Description = "Suppress all output except errors (exit code only)"
+        };
+
         var command = new Command("analyze", "Analyze .NET solution for high-risk files and starting priority")
         {
             solutionOption,
@@ -73,7 +83,9 @@ public class AnalyzeCommand
             outputOption,
             baselineOption,
             noColorOption,
-            formatOption
+            formatOption,
+            verboseOption,
+            quietOption
         };
 
         command.SetAction(parseResult =>
@@ -88,7 +100,9 @@ public class AnalyzeCommand
                 OutputPath = parseResult.GetValue(outputOption),
                 BaselinePath = parseResult.GetValue(baselineOption),
                 NoColor = parseResult.GetValue(noColorOption),
-                Format = parseResult.GetValue(formatOption)!
+                Format = parseResult.GetValue(formatOption)!,
+                Verbose = parseResult.GetValue(verboseOption),
+                Quiet = parseResult.GetValue(quietOption)
             };
 
             return Execute(options, fileSystem, processRunner);
@@ -99,6 +113,12 @@ public class AnalyzeCommand
 
     private static async Task<int> Execute(AnalysisOptions options, IFileSystem fileSystem, IProcessRunner processRunner)
     {
+        if (options.Verbose && options.Quiet)
+        {
+            AnsiConsole.MarkupLine("[red]Error:[/] --verbose and --quiet cannot be used together.");
+            return 1;
+        }
+
         // Validate solution file
         if (!fileSystem.FileExists(options.SolutionPath))
         {
@@ -214,7 +234,7 @@ public class AnalyzeCommand
             ComplexityResult complexityResult = null!;
             DependencyResult dependencyResult = null!;
 
-            if (options.Format == "table" && totalFiles > 0)
+            if (options.Format == "table" && totalFiles > 0 && !options.Quiet)
             {
                 await AnsiConsole.Progress()
                     .AutoClear(true)
@@ -320,26 +340,30 @@ public class AnalyzeCommand
             // Step 5: Render
             var renderer = new ReportRenderer(fileSystem);
             var totalSkippedFiles = complexityResult.SkippedFiles + dependencyResult.SkippedFiles;
-            renderer.Render(reports, options.Top, options.NoColor, options.OutputPath, totalSkippedFiles, baseline, options.Format);
+            renderer.Render(reports, options.Top, options.NoColor, options.OutputPath, totalSkippedFiles, baseline,
+                options.Format, options.Verbose, options.Quiet);
 
-            // Warn about files that had no entry in the coverage report
-            var filesWithNoCoverageEntry = reports
-                .Where(r => r.CoverageRate == 0.0 &&
-                       !coverageResult.FileCoverage.Keys.Any(k =>
-                           k.EndsWith(r.File.Replace('\\', '/'), StringComparison.OrdinalIgnoreCase) ||
-                           r.File.Replace('\\', '/').EndsWith(k, StringComparison.OrdinalIgnoreCase)))
-                .Select(r => r.File)
-                .ToList();
-
-            if (filesWithNoCoverageEntry.Count > 0)
+            if (!options.Quiet)
             {
-                AnsiConsole.MarkupLine($"\n[yellow]Warning:[/] {filesWithNoCoverageEntry.Count} file(s) had no entry in the coverage report (treated as 0% coverage):");
-                foreach (var f in filesWithNoCoverageEntry.Take(10))
+                // Warn about files that had no entry in the coverage report
+                var filesWithNoCoverageEntry = reports
+                    .Where(r => r.CoverageRate == 0.0 &&
+                           !coverageResult.FileCoverage.Keys.Any(k =>
+                               k.EndsWith(r.File.Replace('\\', '/'), StringComparison.OrdinalIgnoreCase) ||
+                               r.File.Replace('\\', '/').EndsWith(k, StringComparison.OrdinalIgnoreCase)))
+                    .Select(r => r.File)
+                    .ToList();
+
+                if (filesWithNoCoverageEntry.Count > 0)
                 {
-                    AnsiConsole.MarkupLine($"  - {f.EscapeMarkup()}");
+                    AnsiConsole.MarkupLine($"\n[yellow]Warning:[/] {filesWithNoCoverageEntry.Count} file(s) had no entry in the coverage report (treated as 0% coverage):");
+                    foreach (var f in filesWithNoCoverageEntry.Take(10))
+                    {
+                        AnsiConsole.MarkupLine($"  - {f.EscapeMarkup()}");
+                    }
+                    if (filesWithNoCoverageEntry.Count > 10)
+                        AnsiConsole.MarkupLine($"  ... and {filesWithNoCoverageEntry.Count - 10} more.");
                 }
-                if (filesWithNoCoverageEntry.Count > 10)
-                    AnsiConsole.MarkupLine($"  ... and {filesWithNoCoverageEntry.Count - 10} more.");
             }
 
             return 0;

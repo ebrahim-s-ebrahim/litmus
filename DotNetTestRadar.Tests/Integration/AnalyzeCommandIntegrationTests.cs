@@ -142,13 +142,14 @@ public class AnalyzeCommandIntegrationTests : IDisposable
     {
         var results = await RunAndReadJsonResults();
 
-        // Verify all 16 expected fields are present on each result
+        // Verify all 19 expected fields are present on each result
         var expectedFields = new[]
         {
             "file", "commits", "weightedChurn", "coverageRate",
             "cyclomaticComplexity", "riskScore", "riskLevel",
             "infrastructureCalls", "directInstantiations", "concreteConstructorParams",
-            "staticCalls", "rawDependencyScore", "dependencyNorm",
+            "staticCalls", "asyncSeamCalls", "concreteCasts", "isRegistrationFile",
+            "rawDependencyScore", "dependencyNorm",
             "dependencyLevel", "startingPriority", "priorityLevel"
         };
 
@@ -181,17 +182,17 @@ public class AnalyzeCommandIntegrationTests : IDisposable
         var lines = File.ReadAllLines(outputPath);
         lines.Length.Should().BeGreaterThanOrEqualTo(4); // header + 3 data rows
 
-        // Header should have 16 columns
+        // Header should have 19 columns
         var headerColumns = lines[0].Split(',');
-        headerColumns.Should().HaveCount(16);
+        headerColumns.Should().HaveCount(19);
         headerColumns[0].Should().Be("file");
 
-        // Data rows should also have 16 columns
+        // Data rows should also have 19 columns
         for (var i = 1; i < lines.Length; i++)
         {
             if (string.IsNullOrWhiteSpace(lines[i])) continue;
             var cols = lines[i].Split(',');
-            cols.Should().HaveCount(16, $"data row {i} should have 16 columns");
+            cols.Should().HaveCount(19, $"data row {i} should have 19 columns");
         }
     }
 
@@ -281,7 +282,7 @@ public class AnalyzeCommandIntegrationTests : IDisposable
         var lines = captured.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
         lines.Length.Should().Be(4); // header + 3 data rows
         lines[0].Should().StartWith("file,");
-        lines[0].Split(',').Should().HaveCount(16);
+        lines[0].Split(',').Should().HaveCount(19);
     }
 
     [Fact]

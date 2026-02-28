@@ -9,12 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `--verbose` flag showing detailed intermediate scores per file (churn norm, coverage, complexity norm, all 6 dependency signal counts)
+- `--quiet` flag suppressing all output except errors and file export
+- Signal 5: async seam call detection (`await httpClient.GetAsync()`, `SaveChangesAsync`, etc.) with ×1.5 weight
+- Signal 6: concrete downcast detection (`(ConcreteType)expr`, `expr as ConcreteType`) with ×1.0 weight
+- DI registration file heuristic: `Program.cs`, `Startup.cs`, and files with `AddScoped`/`AddSingleton`/`AddTransient` calls get zeroed dependency scores
 - Progress bars during analysis using `AnsiConsole.Progress()` for complexity and dependency analyzers
 - `--format json|csv|table` option for structured stdout output, enabling piping to tools like `jq`
 - `--baseline <path.json>` option for comparing against a previous analysis run (Delta column, summary line)
 - Integration tests exercising the full `analyze` pipeline with a real temp git repo
 - Pipeline parallelism: churn, complexity, and dependency analyzers now run concurrently via `Task.WhenAll`
+- Self-analysis dogfooding step in CI workflow — runs `dotnet-testradar analyze` against itself on every push
 - This CHANGELOG file
+
+### Changed
+
+- Pinned all dependency versions to exact resolved versions (no more wildcard `*` ranges)
 
 ## [0.1.0] - 2026-02-27
 

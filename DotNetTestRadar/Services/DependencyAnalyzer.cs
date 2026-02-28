@@ -1,3 +1,4 @@
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using DotNetTestRadar.Abstractions;
@@ -10,6 +11,9 @@ public class FileDependencyData
     public int DirectInstantiations { get; set; }
     public int ConcreteConstructorParams { get; set; }
     public int StaticCalls { get; set; }
+    public int AsyncSeamCalls { get; set; }
+    public int ConcreteCasts { get; set; }
+    public bool IsRegistrationFile { get; set; }
     public double RawDependencyScore { get; set; }
     public double DependencyNorm { get; set; }
 }
@@ -96,6 +100,24 @@ public class DependencyAnalyzer
         "String", "Boolean", "Int32", "Int64", "Double", "Decimal"
     };
 
+    // Signal 5: Known async I/O method names (await receiver.MethodAsync())
+    private static readonly HashSet<string> AsyncIoMethodNames = new(StringComparer.Ordinal)
+    {
+        "GetAsync", "PostAsync", "PutAsync", "DeleteAsync", "SendAsync", "PatchAsync",
+        "ExecuteAsync", "SaveChangesAsync",
+        "ReadAsync", "WriteAsync", "FlushAsync", "CopyToAsync",
+        "ReadLineAsync", "WriteLineAsync",
+        "ExecuteNonQueryAsync", "ExecuteReaderAsync", "ExecuteScalarAsync",
+        "OpenAsync", "CloseAsync"
+    };
+
+    // DI registration method names
+    private static readonly HashSet<string> DiRegistrationMethods = new(StringComparer.Ordinal)
+    {
+        "AddScoped", "AddSingleton", "AddTransient",
+        "AddHostedService", "AddDbContext", "AddHttpClient"
+    };
+
     public DependencyAnalyzer(IFileSystem fileSystem)
     {
         _fileSystem = fileSystem;
@@ -126,6 +148,16 @@ public class DependencyAnalyzer
 
                     var content = _fileSystem.ReadAllText(file);
                     var data = AnalyzeFile(content);
+
+                    // DI registration file heuristic: files that configure DI containers
+                    // have expected high coupling — zero their score
+                    var fileName = Path.GetFileName(file);
+                    if (fileName is "Program.cs" or "Startup.cs" || ContainsDiRegistrations(content))
+                    {
+                        data.IsRegistrationFile = true;
+                        data.RawDependencyScore = 0;
+                    }
+
                     result.Files[relativePath] = data;
                 }
                 catch
@@ -137,11 +169,15 @@ public class DependencyAnalyzer
             }
         }
 
-        // Normalize: divide each raw score by the maximum across all files
-        var maxScore = result.Files.Values.Select(f => f.RawDependencyScore).DefaultIfEmpty(0).Max();
+        // Normalize: divide each raw score by the maximum across non-registration files
+        var maxScore = result.Files.Values
+            .Where(f => !f.IsRegistrationFile)
+            .Select(f => f.RawDependencyScore)
+            .DefaultIfEmpty(0).Max();
         foreach (var data in result.Files.Values)
         {
-            data.DependencyNorm = maxScore > 0 ? data.RawDependencyScore / maxScore : 0.0;
+            data.DependencyNorm = data.IsRegistrationFile ? 0.0
+                : maxScore > 0 ? data.RawDependencyScore / maxScore : 0.0;
         }
 
         return result;
@@ -155,6 +191,8 @@ public class DependencyAnalyzer
         var infraCalls = 0;
         var directInstantiations = 0;
         var staticCalls = 0;
+        var asyncSeamCalls = 0;
+        var concreteCasts = 0;
 
         foreach (var node in root.DescendantNodes())
         {
@@ -198,6 +236,29 @@ public class DependencyAnalyzer
                     && !SafeStaticTypes.Contains(typeId.Identifier.Text):
                     staticCalls++;
                     break;
+
+                // Signal 5: Async seam calls — await receiver.MethodAsync(...)
+                // Catches: await _httpClient.GetAsync(), await _dbContext.SaveChangesAsync()
+                case AwaitExpressionSyntax awaitExpr
+                    when awaitExpr.Expression is InvocationExpressionSyntax awaitInvoke
+                    && awaitInvoke.Expression is MemberAccessExpressionSyntax awaitMac
+                    && awaitMac.Name is IdentifierNameSyntax methodName
+                    && AsyncIoMethodNames.Contains(methodName.Identifier.Text):
+                    asyncSeamCalls++;
+                    break;
+
+                // Signal 6: Concrete downcasts — (ConcreteType)expr
+                // Detects code that defeats interface abstractions
+                case CastExpressionSyntax cast
+                    when IsConcreteTypeName(cast.Type):
+                    concreteCasts++;
+                    break;
+
+                // Signal 6: As-casts — expr as ConcreteType
+                case BinaryExpressionSyntax { RawKind: (int)SyntaxKind.AsExpression } binary
+                    when IsConcreteTypeName(binary.Right as TypeSyntax):
+                    concreteCasts++;
+                    break;
             }
         }
 
@@ -205,7 +266,8 @@ public class DependencyAnalyzer
         // constructor parameters are always at declaration level)
         var concreteParams = CountConcreteConstructorParams(root);
 
-        var rawScore = (infraCalls * 2.0) + (directInstantiations * 1.5) + (concreteParams * 0.5) + (staticCalls * 1.0);
+        var rawScore = (infraCalls * 2.0) + (directInstantiations * 1.5) + (concreteParams * 0.5)
+                     + (staticCalls * 1.0) + (asyncSeamCalls * 1.5) + (concreteCasts * 1.0);
 
         return new FileDependencyData
         {
@@ -213,6 +275,8 @@ public class DependencyAnalyzer
             DirectInstantiations = directInstantiations,
             ConcreteConstructorParams = concreteParams,
             StaticCalls = staticCalls,
+            AsyncSeamCalls = asyncSeamCalls,
+            ConcreteCasts = concreteCasts,
             RawDependencyScore = rawScore
         };
     }
@@ -253,6 +317,42 @@ public class DependencyAnalyzer
         if (InfrastructureNewTypes.Contains(typeName)) return true;
         if (typeName.EndsWith("DbContext", StringComparison.OrdinalIgnoreCase)) return true;
         return false;
+    }
+
+    private static bool ContainsDiRegistrations(string sourceCode)
+    {
+        var tree = CSharpSyntaxTree.ParseText(sourceCode);
+        var root = tree.GetRoot();
+        foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
+        {
+            var methodName = invocation.Expression switch
+            {
+                MemberAccessExpressionSyntax mac => mac.Name.Identifier.Text,
+                IdentifierNameSyntax id => id.Identifier.Text,
+                _ => null
+            };
+            if (methodName != null && DiRegistrationMethods.Contains(methodName))
+                return true;
+        }
+        return false;
+    }
+
+    private static bool IsConcreteTypeName(TypeSyntax? type)
+    {
+        if (type is null) return false;
+        var name = GetSimpleTypeName(type);
+        if (name is null) return false;
+        if (name.Length == 0 || !char.IsUpper(name[0])) return false;
+        if (PrimitiveTypes.Contains(name)) return false;
+        if (name.Length >= 2 && name[0] == 'I' && char.IsUpper(name[1])) return false;
+        if (SafeConstructorParamTypes.Contains(name)) return false;
+        if (SafeNewExact.Contains(name)) return false;
+        foreach (var suffix in SafeNewSuffixes)
+        {
+            if (name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+                return false;
+        }
+        return true;
     }
 
     private static bool IsDirectInstantiationTarget(string typeName)

@@ -61,6 +61,16 @@ public class ScanCommand
         };
         formatOption.AcceptOnlyFromAmong("table", "json", "csv");
 
+        var verboseOption = new Option<bool>("--verbose")
+        {
+            Description = "Show detailed intermediate scores for each file"
+        };
+
+        var quietOption = new Option<bool>("--quiet")
+        {
+            Description = "Suppress all output except errors (exit code only)"
+        };
+
         var command = new Command(
             "scan",
             "Run dotnet test, collect code coverage, and analyze the solution in one step")
@@ -73,7 +83,9 @@ public class ScanCommand
             outputOption,
             baselineOption,
             noColorOption,
-            formatOption
+            formatOption,
+            verboseOption,
+            quietOption
         };
 
         command.SetAction(parseResult =>
@@ -88,7 +100,9 @@ public class ScanCommand
                 OutputPath = parseResult.GetValue(outputOption),
                 BaselinePath = parseResult.GetValue(baselineOption),
                 NoColor = parseResult.GetValue(noColorOption),
-                Format = parseResult.GetValue(formatOption)!
+                Format = parseResult.GetValue(formatOption)!,
+                Verbose = parseResult.GetValue(verboseOption),
+                Quiet = parseResult.GetValue(quietOption)
             };
 
             var testsDir = parseResult.GetValue(testsDirOption);
@@ -104,6 +118,12 @@ public class ScanCommand
         IFileSystem fileSystem,
         IProcessRunner processRunner)
     {
+        if (options.Verbose && options.Quiet)
+        {
+            AnsiConsole.MarkupLine("[red]Error:[/] --verbose and --quiet cannot be used together.");
+            return 1;
+        }
+
         // Validate solution file
         if (!fileSystem.FileExists(options.SolutionPath))
         {
@@ -163,7 +183,8 @@ public class ScanCommand
             Directory.CreateDirectory(tempDir);
 
             // Step 1: Run dotnet test with coverage collection
-            AnsiConsole.MarkupLine("[bold]Step 1/2:[/] Running tests and collecting coverage...");
+            if (!options.Quiet)
+                AnsiConsole.MarkupLine("[bold]Step 1/2:[/] Running tests and collecting coverage...");
 
             var testArgs = $"test \"{testTarget}\" " +
                            $"--collect:\"XPlat Code Coverage\" " +
@@ -172,7 +193,8 @@ public class ScanCommand
             try
             {
                 processRunner.Run("dotnet", testArgs, solutionDir);
-                AnsiConsole.MarkupLine("[green]Tests passed.[/]");
+                if (!options.Quiet)
+                    AnsiConsole.MarkupLine("[green]Tests passed.[/]");
             }
             catch (InvalidOperationException)
             {
@@ -203,7 +225,7 @@ public class ScanCommand
                 var allResults = coverageFiles.Select(f => coverageParser.Parse(f)).ToList();
                 coverageResult = CoverageParser.Merge(allResults);
 
-                if (coverageFiles.Count > 1)
+                if (coverageFiles.Count > 1 && !options.Quiet)
                     AnsiConsole.MarkupLine($"[dim]Merged coverage from {coverageFiles.Count} test project(s).[/]");
             }
             catch (InvalidOperationException ex)
@@ -213,7 +235,8 @@ public class ScanCommand
             }
 
             // Step 2: Run the full analysis pipeline
-            AnsiConsole.MarkupLine("[bold]Step 2/2:[/] Analyzing solution...");
+            if (!options.Quiet)
+                AnsiConsole.MarkupLine("[bold]Step 2/2:[/] Analyzing solution...");
             return await AnalyzeCommand.RunAnalysis(options, coverageResult, fileSystem, processRunner);
         }
         finally

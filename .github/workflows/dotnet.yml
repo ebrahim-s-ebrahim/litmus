@@ -27,7 +27,20 @@ jobs:
       run: dotnet build --no-restore -c Release
 
     - name: Test
-      run: dotnet test --no-build -c Release --verbosity normal
+      run: dotnet test --no-build -c Release --verbosity normal --collect:"XPlat Code Coverage" --results-directory ./TestResults
+
+    - name: Self-analysis (dogfooding)
+      run: |
+        COVERAGE=$(find ./TestResults -name "coverage.cobertura.xml" | head -1)
+        if [ -n "$COVERAGE" ]; then
+          dotnet run --project DotNetTestRadar -c Release -- analyze \
+            --solution DotNetTestRadar.slnx \
+            --coverage "$COVERAGE" \
+            --format json --top 10 > /dev/null
+          echo "Self-analysis completed successfully"
+        else
+          echo "No coverage file found — skipping self-analysis"
+        fi
 
   publish:
     needs: build-and-test

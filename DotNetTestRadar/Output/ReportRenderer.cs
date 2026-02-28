@@ -17,7 +17,8 @@ public class ReportRenderer
     }
 
     public void Render(List<FileRiskReport> reports, int top, bool noColor, string? outputPath, int skippedFiles,
-        Dictionary<string, double>? baseline = null, string format = "table")
+        Dictionary<string, double>? baseline = null, string format = "table",
+        bool verbose = false, bool quiet = false)
     {
         // Structured stdout formats: write JSON or CSV to Console.Out and skip the table
         if (format is "json" or "csv")
@@ -31,6 +32,14 @@ public class ReportRenderer
             if (outputPath != null)
                 ExportResults(reports, outputPath, baseline);
 
+            return;
+        }
+
+        // Quiet mode: skip all table/summary output, only do file export
+        if (quiet)
+        {
+            if (outputPath != null)
+                ExportResults(reports, outputPath, baseline);
             return;
         }
 
@@ -123,6 +132,48 @@ public class ReportRenderer
         if (hasBaseline)
         {
             RenderBaselineSummary(reports, baseline!);
+        }
+
+        // Verbose: show detailed intermediate scores
+        if (verbose)
+        {
+            AnsiConsole.WriteLine();
+            var detailTable = new Table();
+            detailTable.Border(TableBorder.Simple);
+            detailTable.AddColumn("File");
+            detailTable.AddColumn("ChurnNorm");
+            detailTable.AddColumn("Coverage");
+            detailTable.AddColumn("CplxNorm");
+            detailTable.AddColumn("Infra");
+            detailTable.AddColumn("New");
+            detailTable.AddColumn("Params");
+            detailTable.AddColumn("Static");
+            detailTable.AddColumn("Async");
+            detailTable.AddColumn("Casts");
+            detailTable.AddColumn("DepScore");
+            detailTable.AddColumn("DepNorm");
+            detailTable.AddColumn("RegFile");
+
+            foreach (var r in topReports)
+            {
+                detailTable.AddRow(
+                    r.File.EscapeMarkup(),
+                    $"{r.ChurnNorm:F4}",
+                    $"{r.CoverageRate:F4}",
+                    $"{r.ComplexityNorm:F4}",
+                    r.InfrastructureCalls.ToString(),
+                    r.DirectInstantiations.ToString(),
+                    r.ConcreteConstructorParams.ToString(),
+                    r.StaticCalls.ToString(),
+                    r.AsyncSeamCalls.ToString(),
+                    r.ConcreteCasts.ToString(),
+                    $"{r.RawDependencyScore:F2}",
+                    $"{r.DependencyNorm:F4}",
+                    r.IsRegistrationFile ? "Yes" : "");
+            }
+
+            AnsiConsole.MarkupLine("[bold]Detailed Scores[/]");
+            AnsiConsole.Write(detailTable);
         }
 
         if (outputPath != null)
@@ -219,6 +270,9 @@ public class ReportRenderer
                 directInstantiations = r.DirectInstantiations,
                 concreteConstructorParams = r.ConcreteConstructorParams,
                 staticCalls = r.StaticCalls,
+                asyncSeamCalls = r.AsyncSeamCalls,
+                concreteCasts = r.ConcreteCasts,
+                isRegistrationFile = r.IsRegistrationFile,
                 rawDependencyScore = r.RawDependencyScore,
                 dependencyNorm = r.DependencyNorm,
                 dependencyLevel = r.DependencyLevel,
@@ -241,6 +295,7 @@ public class ReportRenderer
         var sb = new StringBuilder();
         var header = "file,commits,weightedChurn,coverageRate,cyclomaticComplexity,riskScore,riskLevel," +
                      "infrastructureCalls,directInstantiations,concreteConstructorParams,staticCalls," +
+                     "asyncSeamCalls,concreteCasts,isRegistrationFile," +
                      "rawDependencyScore,dependencyNorm,dependencyLevel,startingPriority,priorityLevel";
         if (baseline != null)
             header += ",delta";
@@ -250,7 +305,7 @@ public class ReportRenderer
         {
             var line = string.Format(
                 CultureInfo.InvariantCulture,
-                "{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15}",
+                "{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15},{16},{17},{18}",
                 EscapeCsvField(r.File),
                 r.Commits,
                 r.WeightedChurn,
@@ -262,6 +317,9 @@ public class ReportRenderer
                 r.DirectInstantiations,
                 r.ConcreteConstructorParams,
                 r.StaticCalls,
+                r.AsyncSeamCalls,
+                r.ConcreteCasts,
+                r.IsRegistrationFile.ToString().ToLowerInvariant(),
                 r.RawDependencyScore,
                 r.DependencyNorm,
                 EscapeCsvField(r.DependencyLevel),

@@ -11,6 +11,8 @@ public class AnalysisOptions
     public string? BaselinePath { get; set; }
     public bool NoColor { get; set; }
     public string Format { get; set; } = "table";
+    public bool Verbose { get; set; }
+    public bool Quiet { get; set; }
 
     public static readonly string[] DefaultExclusions =
     [

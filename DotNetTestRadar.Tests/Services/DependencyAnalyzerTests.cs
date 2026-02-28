@@ -481,4 +481,131 @@ public class DependencyAnalyzerTests
 
         callCount.Should().Be(3);
     }
+
+    // -------------------------------------------------------------------------
+    // Signal 5 — Async seam calls (weight 1.5)
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public void AnalyzeFile_AwaitHttpClientGetAsync_CountsAsAsyncSeamCall()
+    {
+        var code = """
+            public class C {
+                private HttpClient _client;
+                public async Task M() { var r = await _client.GetAsync("/api"); }
+            }
+            """;
+        var result = DependencyAnalyzer.AnalyzeFile(code);
+        result.AsyncSeamCalls.Should().Be(1);
+    }
+
+    [Fact]
+    public void AnalyzeFile_AwaitSaveChangesAsync_CountsAsAsyncSeamCall()
+    {
+        var code = """
+            public class C {
+                private DbContext _db;
+                public async Task M() { await _db.SaveChangesAsync(); }
+            }
+            """;
+        var result = DependencyAnalyzer.AnalyzeFile(code);
+        result.AsyncSeamCalls.Should().Be(1);
+    }
+
+    [Fact]
+    public void AnalyzeFile_AwaitNonIoMethod_NotCountedAsAsyncSeam()
+    {
+        var code = """
+            public class C {
+                public async Task M() { await Task.Delay(100); }
+            }
+            """;
+        var result = DependencyAnalyzer.AnalyzeFile(code);
+        result.AsyncSeamCalls.Should().Be(0);
+    }
+
+    [Fact]
+    public void AnalyzeFile_MultipleAsyncCalls_CountsEach()
+    {
+        var code = """
+            public class C {
+                private HttpClient _client;
+                public async Task M() {
+                    await _client.GetAsync("/a");
+                    await _client.PostAsync("/b", null);
+                }
+            }
+            """;
+        var result = DependencyAnalyzer.AnalyzeFile(code);
+        result.AsyncSeamCalls.Should().Be(2);
+    }
+
+    // -------------------------------------------------------------------------
+    // Signal 6 — Concrete downcasts (weight 1.0)
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public void AnalyzeFile_CastToConcreteType_CountsAsConcreteCast()
+    {
+        var code = """
+            public class C {
+                public void M(object o) { var x = (UserRepository)o; }
+            }
+            """;
+        var result = DependencyAnalyzer.AnalyzeFile(code);
+        result.ConcreteCasts.Should().Be(1);
+    }
+
+    [Fact]
+    public void AnalyzeFile_AsCastToConcreteType_CountsAsConcreteCast()
+    {
+        var code = """
+            public class C {
+                public void M(object o) { var x = o as UserRepository; }
+            }
+            """;
+        var result = DependencyAnalyzer.AnalyzeFile(code);
+        result.ConcreteCasts.Should().Be(1);
+    }
+
+    [Fact]
+    public void AnalyzeFile_CastToInterface_NotCountedAsConcreteCast()
+    {
+        var code = """
+            public class C {
+                public void M(object o) { var x = (IUserRepository)o; }
+            }
+            """;
+        var result = DependencyAnalyzer.AnalyzeFile(code);
+        result.ConcreteCasts.Should().Be(0);
+    }
+
+    // -------------------------------------------------------------------------
+    // DI registration file detection
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public void Analyze_RegistrationFile_ZerosDependencyScore()
+    {
+        var registrationCode = """
+            public static class ServiceRegistration {
+                public static void Register(IServiceCollection services) {
+                    services.AddScoped<IOrderService, OrderService>();
+                    services.AddSingleton<ICache, RedisCache>();
+                }
+            }
+            """;
+        var fs = Substitute.For<IFileSystem>();
+        fs.DirectoryExists(Arg.Any<string>()).Returns(true);
+        fs.GetFiles(Arg.Any<string>(), "*.cs", true).Returns(["/repo/proj/Registration.cs"]);
+        fs.ReadAllText(Arg.Any<string>()).Returns(registrationCode);
+
+        var analyzer = new DependencyAnalyzer(fs);
+        var result = analyzer.Analyze("/repo", ["proj"], []);
+
+        var file = result.Files.Values.Single();
+        file.IsRegistrationFile.Should().BeTrue();
+        file.RawDependencyScore.Should().Be(0);
+        file.DependencyNorm.Should().Be(0);
+    }
 }

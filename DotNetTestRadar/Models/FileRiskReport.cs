@@ -18,6 +18,9 @@ public class FileRiskReport
     public int DirectInstantiations { get; set; }
     public int ConcreteConstructorParams { get; set; }
     public int StaticCalls { get; set; }
+    public int AsyncSeamCalls { get; set; }
+    public int ConcreteCasts { get; set; }
+    public bool IsRegistrationFile { get; set; }
     public double RawDependencyScore { get; set; }
     public double DependencyNorm { get; set; }
     public string DependencyLevel { get; set; } = "Low";  // Low | Medium | High | Very High

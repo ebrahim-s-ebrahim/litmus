@@ -134,7 +134,7 @@ public class ReportRendererTests
         var lines = csv.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
 
         lines[0].Should().EndWith(",delta");
-        lines[1].Split(',').Length.Should().Be(17);
+        lines[1].Split(',').Length.Should().Be(20);
     }
 
     [Fact]
@@ -146,7 +146,7 @@ public class ReportRendererTests
         var lines = csv.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
 
         lines[0].Should().NotContain("delta");
-        lines[1].Split(',').Length.Should().Be(16);
+        lines[1].Split(',').Length.Should().Be(19);
     }
 
     [Fact]
@@ -229,6 +229,56 @@ public class ReportRendererTests
         // JSON format should include all reports, not just top N
         var parsed = JsonSerializer.Deserialize<List<JsonElement>>(captured);
         parsed.Should().HaveCount(3);
+    }
+
+    [Fact]
+    public void Render_Quiet_SuppressesTableAndSummary()
+    {
+        var reports = new List<FileRiskReport> { MakeReport("A.cs", 0.8) };
+
+        var renderer = new ReportRenderer(Substitute.For<IFileSystem>());
+        var captured = CaptureConsoleOut(() =>
+            renderer.Render(reports, 20, noColor: true, outputPath: null, skippedFiles: 0, quiet: true));
+
+        // Quiet mode should produce no stdout output
+        captured.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Render_Verbose_ShowsDetailedScoresTable()
+    {
+        var reports = new List<FileRiskReport> { MakeReport("A.cs", 0.8) };
+
+        // Verbose mode outputs to AnsiConsole (stderr-like), not Console.Out.
+        // We just verify it doesn't throw and the method completes.
+        var renderer = new ReportRenderer(Substitute.For<IFileSystem>());
+        var act = () => renderer.Render(reports, 20, noColor: true, outputPath: null, skippedFiles: 0, verbose: true);
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void ExportJson_IncludesNewDependencyFields()
+    {
+        var reports = new List<FileRiskReport> { MakeReport("A.cs", 0.5) };
+
+        var json = ReportRenderer.ExportJson(reports);
+
+        json.Should().Contain("\"asyncSeamCalls\"");
+        json.Should().Contain("\"concreteCasts\"");
+        json.Should().Contain("\"isRegistrationFile\"");
+    }
+
+    [Fact]
+    public void ExportCsv_IncludesNewDependencyColumns()
+    {
+        var reports = new List<FileRiskReport> { MakeReport("A.cs", 0.5) };
+
+        var csv = ReportRenderer.ExportCsv(reports);
+        var header = csv.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries)[0];
+
+        header.Should().Contain("asyncSeamCalls");
+        header.Should().Contain("concreteCasts");
+        header.Should().Contain("isRegistrationFile");
     }
 
     private static string CaptureConsoleOut(Action action)

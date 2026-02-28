@@ -29,15 +29,21 @@ DotNetTestRadar.slnx
 │   │   ├── FileFilterHelper.cs       # Glob pattern matching
 │   │   └── RiskScorer.cs              # Final risk + priority formula
 │   └── Program.cs                     # Entry point
-└── DotNetTestRadar.Tests/             # xUnit test project
+└── DotNetTestRadar.Tests/             # Tests (xUnit)
     ├── Helpers/
     │   └── TestFixtures.cs            # Shared test data
+    ├── Integration/
+    │   ├── IntegrationTestFixture.cs  # Real temp git repo setup
+    │   └── AnalyzeCommandIntegrationTests.cs
     └── Services/
         ├── SolutionParserTests.cs
         ├── GitChurnAnalyzerTests.cs
         ├── CoverageParserTests.cs
         ├── ComplexityAnalyzerTests.cs
-        └── RiskScorerTests.cs
+        ├── DependencyAnalyzerTests.cs # 6-signal seam detection tests
+        ├── FileFilterHelperTests.cs
+        ├── RiskScorerTests.cs
+        └── ReportRendererTests.cs
 ```
 
 ## Analysis Pipeline
@@ -268,7 +274,7 @@ These are injected via constructor parameters, not a DI container. The productio
 
 **Why no DI container:** The tool has a flat dependency graph with only two abstractions. A container adds startup overhead and ceremony for no real benefit. Manual injection in `Program.cs` makes the wiring explicit and traceable.
 
-**Test impact:** All 42 tests use `NSubstitute` to mock these interfaces, making tests fully deterministic with no disk or process dependencies.
+**Test impact:** Unit tests use `NSubstitute` to mock these interfaces, making them fully deterministic with no disk or process dependencies.
 
 ---
 
@@ -296,11 +302,11 @@ Path management is the trickiest part of the codebase, because three different s
 | Dependency | Version | Why |
 |---|---|---|
 | **System.CommandLine** | 2.0.3 | The official .NET CLI framework. Stable release (not the pre-release API). |
-| **Spectre.Console** | 0.54+ | Rich terminal tables with zero effort. Cross-platform ANSI support. |
-| **Microsoft.CodeAnalysis.CSharp** | 4.14+ | Roslyn syntax trees for complexity analysis. No semantic model needed. |
-| **xUnit** | 2.x | Standard .NET test framework. |
-| **FluentAssertions** | 8.x | Readable assertions with good error messages. |
-| **NSubstitute** | 5.x | Clean mocking syntax without lambda ceremony. |
+| **Spectre.Console** | 0.54.0 | Rich terminal tables with zero effort. Cross-platform ANSI support. |
+| **Microsoft.CodeAnalysis.CSharp** | 4.14.0 | Roslyn syntax trees for complexity and dependency analysis. No semantic model needed. |
+| **xUnit** | 2.9.3 | Standard .NET test framework. |
+| **FluentAssertions** | 8.8.0 | Readable assertions with good error messages. |
+| **NSubstitute** | 5.3.0 | Clean mocking syntax without lambda ceremony. |
 
 **What's NOT included and why:**
 
@@ -343,17 +349,21 @@ This differs from the pre-release API (`AddOption`, `SetHandler` with delegates,
 
 ## Test Coverage
 
-42 tests across 5 test classes:
+167 tests across 9 test classes:
 
 | Test Class | Count | What's Tested |
 |---|---|---|
 | `SolutionParserTests` | 9 | .sln/.slnx parsing, folder filtering, path normalization, error cases |
 | `GitChurnAnalyzerTests` | 10 | Numstat parsing, noise floor, normalization, exclusion globs, binary files, path handling |
-| `CoverageParserTests` | 6 | Cobertura XML parsing, suffix matching, separator handling, malformed XML |
-| `ComplexityAnalyzerTests` | 7 | All branch types, multi-method, normalization, skipped files, project scoping |
+| `CoverageParserTests` | 12 | Cobertura XML parsing, suffix matching, separator handling, malformed XML, multi-file merge |
+| `ComplexityAnalyzerTests` | 8 | All branch types, multi-method, normalization, skipped files, project scoping, progress callback |
+| `DependencyAnalyzerTests` | 39 | 6-signal detection (infra, new, ctor params, static, async seam, casts), DI registration, normalization |
+| `FileFilterHelperTests` | 9 | Glob pattern matching, default exclusions |
 | `RiskScorerTests` | 10 | Zero cases, boundary classification, complexity amplification, score cap |
+| `ReportRendererTests` | 19 | Baseline stats, JSON/CSV export, --format stdout, --verbose, --quiet |
+| `AnalyzeCommandIntegrationTests` | 11 | End-to-end pipeline with real git repo, --format json/csv, --baseline, progress |
 
-All service tests mock `IFileSystem` and `IProcessRunner`, making them fast and deterministic.
+Unit tests mock `IFileSystem` and `IProcessRunner`, making them fast and deterministic. Integration tests create real temp git repos with `.slnx`, `.cs` files, git history, and Cobertura XML.
 
 ---
 
