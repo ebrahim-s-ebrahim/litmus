@@ -22,7 +22,7 @@ public class AnalyzeCommandIntegrationTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private int RunAnalysis(AnalysisOptions? overrides = null)
+    private async Task<int> RunAnalysis(AnalysisOptions? overrides = null)
     {
         var options = overrides ?? new AnalysisOptions
         {
@@ -36,10 +36,10 @@ public class AnalyzeCommandIntegrationTests : IDisposable
         var coverageParser = new CoverageParser(_fileSystem);
         var coverageResult = coverageParser.Parse(options.CoveragePath);
 
-        return AnalyzeCommand.RunAnalysis(options, coverageResult, _fileSystem, _processRunner);
+        return await AnalyzeCommand.RunAnalysis(options, coverageResult, _fileSystem, _processRunner);
     }
 
-    private List<JsonElement> RunAndReadJsonResults(AnalysisOptions? overrides = null)
+    private async Task<List<JsonElement>> RunAndReadJsonResults(AnalysisOptions? overrides = null)
     {
         var outputPath = Path.Combine(_fixture.RootDir, $"results-{Guid.NewGuid():N}.json");
         var options = overrides ?? new AnalysisOptions
@@ -54,7 +54,7 @@ public class AnalyzeCommandIntegrationTests : IDisposable
 
         var coverageParser = new CoverageParser(_fileSystem);
         var coverageResult = coverageParser.Parse(options.CoveragePath);
-        var exitCode = AnalyzeCommand.RunAnalysis(options, coverageResult, _fileSystem, _processRunner);
+        var exitCode = await AnalyzeCommand.RunAnalysis(options, coverageResult, _fileSystem, _processRunner);
 
         exitCode.Should().Be(0, "the analysis pipeline should succeed");
 
@@ -63,9 +63,9 @@ public class AnalyzeCommandIntegrationTests : IDisposable
     }
 
     [Fact]
-    public void HappyPath_ProducesRankedResults()
+    public async Task HappyPath_ProducesRankedResults()
     {
-        var results = RunAndReadJsonResults();
+        var results = await RunAndReadJsonResults();
 
         // Should have exactly 3 source files (test project filtered out)
         results.Should().HaveCount(3);
@@ -84,9 +84,9 @@ public class AnalyzeCommandIntegrationTests : IDisposable
     }
 
     [Fact]
-    public void RiskScores_AreNonZero_ForFilesWithChurn()
+    public async Task RiskScores_AreNonZero_ForFilesWithChurn()
     {
-        var results = RunAndReadJsonResults();
+        var results = await RunAndReadJsonResults();
 
         // All files were committed, so all should have some churn
         results.Should().OnlyContain(r => r.GetProperty("riskScore").GetDouble() >= 0);
@@ -102,9 +102,9 @@ public class AnalyzeCommandIntegrationTests : IDisposable
     }
 
     [Fact]
-    public void DependencySignals_DetectedCorrectly()
+    public async Task DependencySignals_DetectedCorrectly()
     {
-        var results = RunAndReadJsonResults();
+        var results = await RunAndReadJsonResults();
 
         // OrderService uses DateTime.Now and new HttpClient() — infrastructure calls
         var orderService = results.First(r => r.GetProperty("file").GetString()!.Contains("OrderService"));
@@ -121,9 +121,9 @@ public class AnalyzeCommandIntegrationTests : IDisposable
     }
 
     [Fact]
-    public void ExcludePattern_FiltersFiles()
+    public async Task ExcludePattern_FiltersFiles()
     {
-        var results = RunAndReadJsonResults(new AnalysisOptions
+        var results = await RunAndReadJsonResults(new AnalysisOptions
         {
             SolutionPath = _fixture.SolutionPath,
             CoveragePath = _fixture.CoveragePath,
@@ -138,9 +138,9 @@ public class AnalyzeCommandIntegrationTests : IDisposable
     }
 
     [Fact]
-    public void JsonExport_ProducesValidOutput()
+    public async Task JsonExport_ProducesValidOutput()
     {
-        var results = RunAndReadJsonResults();
+        var results = await RunAndReadJsonResults();
 
         // Verify all 16 expected fields are present on each result
         var expectedFields = new[]
@@ -162,7 +162,7 @@ public class AnalyzeCommandIntegrationTests : IDisposable
     }
 
     [Fact]
-    public void CsvExport_ProducesValidOutput()
+    public async Task CsvExport_ProducesValidOutput()
     {
         var outputPath = Path.Combine(_fixture.RootDir, $"results-{Guid.NewGuid():N}.csv");
         var options = new AnalysisOptions
@@ -175,7 +175,7 @@ public class AnalyzeCommandIntegrationTests : IDisposable
             OutputPath = outputPath
         };
 
-        var exitCode = RunAnalysis(options);
+        var exitCode = await RunAnalysis(options);
         exitCode.Should().Be(0);
 
         var lines = File.ReadAllLines(outputPath);
@@ -196,13 +196,60 @@ public class AnalyzeCommandIntegrationTests : IDisposable
     }
 
     [Fact]
-    public void TestProject_IsExcludedFromResults()
+    public async Task TestProject_IsExcludedFromResults()
     {
-        var results = RunAndReadJsonResults();
+        var results = await RunAndReadJsonResults();
 
         results.Should().NotContain(r =>
             r.GetProperty("file").GetString()!.Contains("MyApp.Tests", StringComparison.OrdinalIgnoreCase));
         results.Should().NotContain(r =>
             r.GetProperty("file").GetString()!.Contains("SampleTest", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task Baseline_ComparesAgainstPreviousRun()
+    {
+        // First run: generate baseline JSON
+        var baselinePath = Path.Combine(_fixture.RootDir, "baseline.json");
+        var firstRunOptions = new AnalysisOptions
+        {
+            SolutionPath = _fixture.SolutionPath,
+            CoveragePath = _fixture.CoveragePath,
+            Since = DateTime.Today.AddYears(-1),
+            Top = 20,
+            NoColor = true,
+            OutputPath = baselinePath
+        };
+
+        var exitCode = await RunAnalysis(firstRunOptions);
+        exitCode.Should().Be(0);
+        File.Exists(baselinePath).Should().BeTrue();
+
+        // Second run: use baseline, export new results with delta
+        var resultsPath = Path.Combine(_fixture.RootDir, "results-with-delta.json");
+        var secondRunOptions = new AnalysisOptions
+        {
+            SolutionPath = _fixture.SolutionPath,
+            CoveragePath = _fixture.CoveragePath,
+            Since = DateTime.Today.AddYears(-1),
+            Top = 20,
+            NoColor = true,
+            BaselinePath = baselinePath,
+            OutputPath = resultsPath
+        };
+
+        exitCode = await RunAnalysis(secondRunOptions);
+        exitCode.Should().Be(0);
+
+        // Parse results — delta should be present and ~0 (same data)
+        var json = File.ReadAllText(resultsPath);
+        var results = JsonSerializer.Deserialize<List<JsonElement>>(json)!;
+
+        foreach (var r in results)
+        {
+            r.TryGetProperty("delta", out var deltaEl).Should().BeTrue("delta field should be present with baseline");
+            Math.Abs(deltaEl.GetDouble()).Should().BeLessThan(0.01,
+                "delta should be near zero when comparing identical runs");
+        }
     }
 }

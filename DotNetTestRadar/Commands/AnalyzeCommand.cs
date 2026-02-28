@@ -1,4 +1,5 @@
 using System.CommandLine;
+using System.Text.Json;
 using DotNetTestRadar.Abstractions;
 using DotNetTestRadar.Models;
 using DotNetTestRadar.Output;
@@ -45,6 +46,11 @@ public class AnalyzeCommand
             Description = "Export results to a JSON or CSV file"
         };
 
+        var baselineOption = new Option<string?>("--baseline")
+        {
+            Description = "Path to a previous JSON export to compare against"
+        };
+
         var noColorOption = new Option<bool>("--no-color")
         {
             Description = "Disable colored output"
@@ -58,6 +64,7 @@ public class AnalyzeCommand
             topOption,
             excludeOption,
             outputOption,
+            baselineOption,
             noColorOption
         };
 
@@ -71,6 +78,7 @@ public class AnalyzeCommand
                 Top = parseResult.GetValue(topOption),
                 ExcludePatterns = parseResult.GetValue(excludeOption)?.ToList() ?? [],
                 OutputPath = parseResult.GetValue(outputOption),
+                BaselinePath = parseResult.GetValue(baselineOption),
                 NoColor = parseResult.GetValue(noColorOption)
             };
 
@@ -80,7 +88,7 @@ public class AnalyzeCommand
         return command;
     }
 
-    private static int Execute(AnalysisOptions options, IFileSystem fileSystem, IProcessRunner processRunner)
+    private static async Task<int> Execute(AnalysisOptions options, IFileSystem fileSystem, IProcessRunner processRunner)
     {
         // Validate solution file
         if (!fileSystem.FileExists(options.SolutionPath))
@@ -100,6 +108,13 @@ public class AnalyzeCommand
         if (!fileSystem.FileExists(options.CoveragePath))
         {
             AnsiConsole.MarkupLine("[red]Error:[/] Coverage file not found: " + options.CoveragePath);
+            return 1;
+        }
+
+        // Validate baseline file if provided
+        if (options.BaselinePath != null && !fileSystem.FileExists(options.BaselinePath))
+        {
+            AnsiConsole.MarkupLine("[red]Error:[/] Baseline file not found: " + options.BaselinePath);
             return 1;
         }
 
@@ -127,16 +142,17 @@ public class AnalyzeCommand
             return 1;
         }
 
-        return RunAnalysis(options, coverageResult, fileSystem, processRunner);
+        return await RunAnalysis(options, coverageResult, fileSystem, processRunner);
     }
 
     /// <summary>
-    /// Runs the core analysis pipeline (solution parsing → churn → complexity → dependency →
+    /// Runs the core analysis pipeline (solution parsing → churn | complexity | dependency →
     /// scoring → rendering) using an already-parsed coverage result. Called by both
     /// <see cref="AnalyzeCommand"/> (coverage from file) and <see cref="ScanCommand"/>
     /// (coverage auto-generated from dotnet test).
+    /// Analyzers run in parallel for performance.
     /// </summary>
-    internal static int RunAnalysis(
+    internal static async Task<int> RunAnalysis(
         AnalysisOptions options,
         CoverageResult coverageResult,
         IFileSystem fileSystem,
@@ -171,28 +187,33 @@ public class AnalyzeCommand
             // Compute effective exclusion patterns once for all analyzers
             var effectivePatterns = FileFilterHelper.GetEffectivePatterns(options.ExcludePatterns);
 
-            // Step 1: Git churn
+            // Steps 1-3: Run churn, complexity, and dependency analyzers in parallel
             var churnAnalyzer = new GitChurnAnalyzer(processRunner);
-            var churnResult = churnAnalyzer.Analyze(
+            var complexityAnalyzer = new ComplexityAnalyzer(fileSystem);
+            var dependencyAnalyzer = new DependencyAnalyzer(fileSystem);
+
+            var churnTask = Task.Run(() => churnAnalyzer.Analyze(
                 parseResult.GitRoot,
                 parseResult.SolutionDirectory,
                 parseResult.ProjectDirectories,
                 options.Since,
-                options.ExcludePatterns);
+                options.ExcludePatterns));
 
-            // Step 2: Complexity
-            var complexityAnalyzer = new ComplexityAnalyzer(fileSystem);
-            var complexityResult = complexityAnalyzer.Analyze(
+            var complexityTask = Task.Run(() => complexityAnalyzer.Analyze(
                 parseResult.GitRoot,
                 parseResult.ProjectDirectories,
-                effectivePatterns);
+                effectivePatterns));
 
-            // Step 3: Dependency analysis (Phase 2 — seam detection)
-            var dependencyAnalyzer = new DependencyAnalyzer(fileSystem);
-            var dependencyResult = dependencyAnalyzer.Analyze(
+            var dependencyTask = Task.Run(() => dependencyAnalyzer.Analyze(
                 parseResult.GitRoot,
                 parseResult.ProjectDirectories,
-                effectivePatterns);
+                effectivePatterns));
+
+            await Task.WhenAll(churnTask, complexityTask, dependencyTask);
+
+            var churnResult = churnTask.Result;
+            var complexityResult = complexityTask.Result;
+            var dependencyResult = dependencyTask.Result;
 
             // Step 4: Risk scoring + starting priority
             var riskScorer = new RiskScorer();
@@ -210,10 +231,29 @@ public class AnalyzeCommand
                 return 0;
             }
 
+            // Load baseline if provided
+            Dictionary<string, double>? baseline = null;
+            if (options.BaselinePath != null)
+            {
+                try
+                {
+                    var baselineJson = fileSystem.ReadAllText(options.BaselinePath);
+                    var items = JsonSerializer.Deserialize<List<JsonElement>>(baselineJson)!;
+                    baseline = items.ToDictionary(
+                        e => e.GetProperty("file").GetString()!,
+                        e => e.GetProperty("startingPriority").GetDouble());
+                }
+                catch (Exception ex)
+                {
+                    AnsiConsole.MarkupLine($"[red]Error:[/] Failed to load baseline: {ex.Message.EscapeMarkup()}");
+                    return 1;
+                }
+            }
+
             // Step 5: Render
             var renderer = new ReportRenderer(fileSystem);
             var totalSkippedFiles = complexityResult.SkippedFiles + dependencyResult.SkippedFiles;
-            renderer.Render(reports, options.Top, options.NoColor, options.OutputPath, totalSkippedFiles);
+            renderer.Render(reports, options.Top, options.NoColor, options.OutputPath, totalSkippedFiles, baseline);
 
             // Warn about files that had no entry in the coverage report
             var filesWithNoCoverageEntry = reports

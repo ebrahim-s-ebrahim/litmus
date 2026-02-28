@@ -82,6 +82,7 @@ dotnet-testradar analyze --solution MyApp.sln --coverage TestResults/.../coverag
 | `--top` | No | 20 | Number of top files to display |
 | `--exclude` | No | -- | Glob pattern(s) to exclude files (repeatable) |
 | `--output` | No | -- | Export full results to a `.json` or `.csv` file |
+| `--baseline` | No | -- | Path to a previous JSON export to compare against |
 | `--no-color` | No | false | Disable colored output |
 
 ### `analyze` — use an existing coverage file
@@ -94,6 +95,7 @@ dotnet-testradar analyze --solution MyApp.sln --coverage TestResults/.../coverag
 | `--top` | No | 20 | Number of top files to display |
 | `--exclude` | No | -- | Glob pattern(s) to exclude files (repeatable) |
 | `--output` | No | -- | Export full results to a `.json` or `.csv` file |
+| `--baseline` | No | -- | Path to a previous JSON export to compare against |
 | `--no-color` | No | false | Disable colored output |
 
 ## Examples
@@ -132,6 +134,24 @@ dotnet-testradar analyze \
   --exclude "**/ViewModels/*.cs" \
   --output report.json
 ```
+
+### Compare against a baseline (CI diff mode)
+
+```bash
+# First run: save a baseline
+dotnet-testradar analyze \
+  --solution MyApp.sln \
+  --coverage coverage.xml \
+  --output baseline.json
+
+# Later: compare current state against the baseline
+dotnet-testradar analyze \
+  --solution MyApp.sln \
+  --coverage coverage.xml \
+  --baseline baseline.json
+```
+
+When `--baseline` is provided, a **Delta** column appears in the table showing how each file's Starting Priority changed (`+0.15` = degraded, `-0.10` = improved, `NEW` = not in baseline). A summary line reports: `vs baseline: N improved, N degraded, N new, N removed.`
 
 ### Pipe-friendly plain output
 

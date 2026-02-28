@@ -44,6 +44,11 @@ public class ScanCommand
             Description = "Export results to a JSON or CSV file"
         };
 
+        var baselineOption = new Option<string?>("--baseline")
+        {
+            Description = "Path to a previous JSON export to compare against"
+        };
+
         var noColorOption = new Option<bool>("--no-color")
         {
             Description = "Disable colored output"
@@ -59,6 +64,7 @@ public class ScanCommand
             topOption,
             excludeOption,
             outputOption,
+            baselineOption,
             noColorOption
         };
 
@@ -72,6 +78,7 @@ public class ScanCommand
                 Top = parseResult.GetValue(topOption),
                 ExcludePatterns = parseResult.GetValue(excludeOption)?.ToList() ?? [],
                 OutputPath = parseResult.GetValue(outputOption),
+                BaselinePath = parseResult.GetValue(baselineOption),
                 NoColor = parseResult.GetValue(noColorOption)
             };
 
@@ -82,7 +89,7 @@ public class ScanCommand
         return command;
     }
 
-    private static int Execute(
+    private static async Task<int> Execute(
         AnalysisOptions options,
         string? testsDir,
         IFileSystem fileSystem,
@@ -106,6 +113,13 @@ public class ScanCommand
         if (testsDir != null && !fileSystem.FileExists(testsDir) && !fileSystem.DirectoryExists(testsDir))
         {
             AnsiConsole.MarkupLine($"[red]Error:[/] Tests path not found: {testsDir}");
+            return 1;
+        }
+
+        // Validate baseline file if provided
+        if (options.BaselinePath != null && !fileSystem.FileExists(options.BaselinePath))
+        {
+            AnsiConsole.MarkupLine("[red]Error:[/] Baseline file not found: " + options.BaselinePath);
             return 1;
         }
 
@@ -191,7 +205,7 @@ public class ScanCommand
 
             // Step 2: Run the full analysis pipeline
             AnsiConsole.MarkupLine("[bold]Step 2/2:[/] Analyzing solution...");
-            return AnalyzeCommand.RunAnalysis(options, coverageResult, fileSystem, processRunner);
+            return await AnalyzeCommand.RunAnalysis(options, coverageResult, fileSystem, processRunner);
         }
         finally
         {

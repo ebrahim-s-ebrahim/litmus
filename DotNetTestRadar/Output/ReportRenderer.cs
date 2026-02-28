@@ -16,9 +16,11 @@ public class ReportRenderer
         _fileSystem = fileSystem;
     }
 
-    public void Render(List<FileRiskReport> reports, int top, bool noColor, string? outputPath, int skippedFiles)
+    public void Render(List<FileRiskReport> reports, int top, bool noColor, string? outputPath, int skippedFiles,
+        Dictionary<string, double>? baseline = null)
     {
         var topReports = reports.Take(top).ToList();
+        var hasBaseline = baseline != null;
 
         var table = new Table();
         table.Border(TableBorder.Rounded);
@@ -30,6 +32,8 @@ public class ReportRenderer
         table.AddColumn("Dependency");
         table.AddColumn("Risk");
         table.AddColumn("Priority");
+        if (hasBaseline)
+            table.AddColumn("Delta");
         table.AddColumn("Level");
 
         for (var i = 0; i < topReports.Count; i++)
@@ -63,17 +67,27 @@ public class ReportRenderer
                 _ => rowStyle
             };
 
-            table.AddRow(
-                new Markup($"[{rowStyle}]{i + 1}[/]"),
-                new Markup($"[{rowStyle}]{r.File.EscapeMarkup()}[/]"),
-                new Markup($"[{rowStyle}]{r.Commits}[/]"),
-                new Markup($"[{rowStyle}]{coverageStr}[/]"),
-                new Markup($"[{rowStyle}]{r.CyclomaticComplexity}[/]"),
-                new Markup($"[{depStyle}]{r.DependencyLevel}[/]"),
-                new Markup($"[{riskStyle}]{riskStr}[/]"),
-                new Markup($"[{rowStyle}]{priorityStr}[/]"),
-                new Markup($"[{rowStyle}]{r.PriorityLevel}[/]")
-            );
+            var columns = new List<Markup>
+            {
+                new($"[{rowStyle}]{i + 1}[/]"),
+                new($"[{rowStyle}]{r.File.EscapeMarkup()}[/]"),
+                new($"[{rowStyle}]{r.Commits}[/]"),
+                new($"[{rowStyle}]{coverageStr}[/]"),
+                new($"[{rowStyle}]{r.CyclomaticComplexity}[/]"),
+                new($"[{depStyle}]{r.DependencyLevel}[/]"),
+                new($"[{riskStyle}]{riskStr}[/]"),
+                new($"[{rowStyle}]{priorityStr}[/]")
+            };
+
+            if (hasBaseline)
+            {
+                var deltaMarkup = FormatDelta(r.File, r.StartingPriority, baseline!, noColor);
+                columns.Add(deltaMarkup);
+            }
+
+            columns.Add(new Markup($"[{rowStyle}]{r.PriorityLevel}[/]"));
+
+            table.AddRow(columns);
         }
 
         AnsiConsole.Write(table);
@@ -90,19 +104,78 @@ public class ReportRenderer
 
         AnsiConsole.MarkupLine(summary);
 
+        // Baseline comparison summary
+        if (hasBaseline)
+        {
+            RenderBaselineSummary(reports, baseline!);
+        }
+
         if (outputPath != null)
         {
-            ExportResults(reports, outputPath);
+            ExportResults(reports, outputPath, baseline);
         }
     }
 
-    private void ExportResults(List<FileRiskReport> reports, string outputPath)
+    internal static Markup FormatDelta(string file, double currentPriority, Dictionary<string, double> baseline, bool noColor)
+    {
+        if (!baseline.TryGetValue(file, out var previousPriority))
+            return new Markup(noColor ? "NEW" : "[dim]NEW[/]");
+
+        var delta = currentPriority - previousPriority;
+
+        if (Math.Abs(delta) < 0.005)
+            return new Markup("\u2014"); // em dash
+
+        var sign = delta > 0 ? "+" : "";
+        var deltaStr = $"{sign}{delta:F2}";
+
+        if (noColor)
+            return new Markup(deltaStr);
+
+        // Positive delta = priority went up = file got worse = red
+        // Negative delta = priority went down = file improved = green
+        var style = delta > 0 ? "red" : "green";
+        return new Markup($"[{style}]{deltaStr}[/]");
+    }
+
+    internal static (int Improved, int Degraded, int New, int Removed) ComputeBaselineStats(
+        List<FileRiskReport> reports, Dictionary<string, double> baseline)
+    {
+        var improved = 0;
+        var degraded = 0;
+        var newFiles = 0;
+
+        foreach (var r in reports)
+        {
+            if (!baseline.TryGetValue(r.File, out var prev))
+            {
+                newFiles++;
+                continue;
+            }
+
+            var delta = r.StartingPriority - prev;
+            if (delta < -0.005) improved++;
+            else if (delta > 0.005) degraded++;
+        }
+
+        var removedFiles = baseline.Keys.Count(k => reports.All(r => r.File != k));
+
+        return (improved, degraded, newFiles, removedFiles);
+    }
+
+    private static void RenderBaselineSummary(List<FileRiskReport> reports, Dictionary<string, double> baseline)
+    {
+        var (improved, degraded, newFiles, removed) = ComputeBaselineStats(reports, baseline);
+        AnsiConsole.MarkupLine($"vs baseline: {improved} improved, {degraded} degraded, {newFiles} new, {removed} removed.");
+    }
+
+    private void ExportResults(List<FileRiskReport> reports, string outputPath, Dictionary<string, double>? baseline)
     {
         var extension = Path.GetExtension(outputPath).ToLowerInvariant();
         var content = extension switch
         {
-            ".json" => ExportJson(reports),
-            ".csv" => ExportCsv(reports),
+            ".json" => ExportJson(reports, baseline),
+            ".csv" => ExportCsv(reports, baseline),
             _ => throw new ArgumentException($"Unsupported output format: {extension}. Use .json or .csv.")
         };
 
@@ -110,45 +183,57 @@ public class ReportRenderer
         AnsiConsole.MarkupLine($"Results exported to [bold]{outputPath.EscapeMarkup()}[/]");
     }
 
-    private static string ExportJson(List<FileRiskReport> reports)
+    internal static string ExportJson(List<FileRiskReport> reports, Dictionary<string, double>? baseline = null)
     {
-        var exportData = reports.Select(r => new
+        var exportData = reports.Select(r =>
         {
-            file = r.File,
-            commits = r.Commits,
-            weightedChurn = r.WeightedChurn,
-            coverageRate = r.CoverageRate,
-            cyclomaticComplexity = r.CyclomaticComplexity,
-            riskScore = r.RiskScore,
-            riskLevel = r.RiskLevel,
-            infrastructureCalls = r.InfrastructureCalls,
-            directInstantiations = r.DirectInstantiations,
-            concreteConstructorParams = r.ConcreteConstructorParams,
-            staticCalls = r.StaticCalls,
-            rawDependencyScore = r.RawDependencyScore,
-            dependencyNorm = r.DependencyNorm,
-            dependencyLevel = r.DependencyLevel,
-            startingPriority = r.StartingPriority,
-            priorityLevel = r.PriorityLevel
+            double? delta = baseline != null
+                ? (baseline.TryGetValue(r.File, out var prev) ? r.StartingPriority - prev : null)
+                : null;
+
+            return new
+            {
+                file = r.File,
+                commits = r.Commits,
+                weightedChurn = r.WeightedChurn,
+                coverageRate = r.CoverageRate,
+                cyclomaticComplexity = r.CyclomaticComplexity,
+                riskScore = r.RiskScore,
+                riskLevel = r.RiskLevel,
+                infrastructureCalls = r.InfrastructureCalls,
+                directInstantiations = r.DirectInstantiations,
+                concreteConstructorParams = r.ConcreteConstructorParams,
+                staticCalls = r.StaticCalls,
+                rawDependencyScore = r.RawDependencyScore,
+                dependencyNorm = r.DependencyNorm,
+                dependencyLevel = r.DependencyLevel,
+                startingPriority = r.StartingPriority,
+                priorityLevel = r.PriorityLevel,
+                delta
+            };
         });
 
         return JsonSerializer.Serialize(exportData, new JsonSerializerOptions
         {
             WriteIndented = true,
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
         });
     }
 
-    private static string ExportCsv(List<FileRiskReport> reports)
+    internal static string ExportCsv(List<FileRiskReport> reports, Dictionary<string, double>? baseline = null)
     {
         var sb = new StringBuilder();
-        sb.AppendLine("file,commits,weightedChurn,coverageRate,cyclomaticComplexity,riskScore,riskLevel," +
-                      "infrastructureCalls,directInstantiations,concreteConstructorParams,staticCalls," +
-                      "rawDependencyScore,dependencyNorm,dependencyLevel,startingPriority,priorityLevel");
+        var header = "file,commits,weightedChurn,coverageRate,cyclomaticComplexity,riskScore,riskLevel," +
+                     "infrastructureCalls,directInstantiations,concreteConstructorParams,staticCalls," +
+                     "rawDependencyScore,dependencyNorm,dependencyLevel,startingPriority,priorityLevel";
+        if (baseline != null)
+            header += ",delta";
+        sb.AppendLine(header);
 
         foreach (var r in reports)
         {
-            sb.AppendLine(string.Format(
+            var line = string.Format(
                 CultureInfo.InvariantCulture,
                 "{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15}",
                 EscapeCsvField(r.File),
@@ -166,7 +251,17 @@ public class ReportRenderer
                 r.DependencyNorm,
                 EscapeCsvField(r.DependencyLevel),
                 r.StartingPriority,
-                EscapeCsvField(r.PriorityLevel)));
+                EscapeCsvField(r.PriorityLevel));
+
+            if (baseline != null)
+            {
+                var delta = baseline.TryGetValue(r.File, out var prev)
+                    ? (r.StartingPriority - prev).ToString("F4", CultureInfo.InvariantCulture)
+                    : "NEW";
+                line += $",{delta}";
+            }
+
+            sb.AppendLine(line);
         }
 
         return sb.ToString();

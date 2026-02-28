@@ -13,7 +13,8 @@ DotNetTestRadar.slnx
 │   │   ├── FileSystemWrapper.cs
 │   │   └── ProcessRunner.cs
 │   ├── Commands/
-│   │   └── AnalyzeCommand.cs          # CLI definition + orchestration
+│   │   ├── AnalyzeCommand.cs          # CLI definition + orchestration
+│   │   └── ScanCommand.cs             # One-step test + analyze
 │   ├── Models/
 │   │   ├── AnalysisOptions.cs         # Parsed CLI options
 │   │   └── FileRiskReport.cs          # Per-file output model
@@ -24,7 +25,9 @@ DotNetTestRadar.slnx
 │   │   ├── GitChurnAnalyzer.cs        # Git log --numstat analysis
 │   │   ├── CoverageParser.cs          # Cobertura XML parsing
 │   │   ├── ComplexityAnalyzer.cs      # Roslyn-based cyclomatic complexity
-│   │   └── RiskScorer.cs              # Final risk formula
+│   │   ├── DependencyAnalyzer.cs     # Roslyn-based seam detection (Phase 2)
+│   │   ├── FileFilterHelper.cs       # Glob pattern matching
+│   │   └── RiskScorer.cs              # Final risk + priority formula
 │   └── Program.cs                     # Entry point
 └── DotNetTestRadar.Tests/             # xUnit test project
     ├── Helpers/
@@ -46,23 +49,23 @@ Solution Path ─► SolutionParser ─► SolutionParseResult
                                        │
                       ┌────────────────┼────────────────┐
                       ▼                ▼                ▼
-              GitChurnAnalyzer  CoverageParser  ComplexityAnalyzer
+              GitChurnAnalyzer  ComplexityAnalyzer  DependencyAnalyzer
                       │                │                │
-                      ▼                ▼                ▼
-                 ChurnResult    CoverageResult   ComplexityResult
+                      ▼                ▼                ▼      (parallel via Task.WhenAll)
+                 ChurnResult    ComplexityResult   DependencyResult
                       │                │                │
                       └────────────────┼────────────────┘
                                        ▼
-                                   RiskScorer
+                          RiskScorer (+CoverageResult)
                                        │
                                        ▼
                               List<FileRiskReport>
                                        │
                                        ▼
-                                 ReportRenderer
+                           ReportRenderer (+baseline?)
 ```
 
-Steps 1-3 (churn, coverage, complexity) are independent and could be parallelized in a future version.
+Steps 1-3 (churn, complexity, dependency) run in parallel using `Task.Run` + `Task.WhenAll`. Each analyzer creates its own result object with no shared mutable state, so parallelism is safe. Coverage is parsed before `RunAnalysis` is called and passed in directly.
 
 ---
 
@@ -356,9 +359,9 @@ All service tests mock `IFileSystem` and `IProcessRunner`, making them fast and 
 
 ## Known Limitations
 
-1. **No incremental analysis** -- Every run re-analyzes the full git history within the `--since` window. For very large repos, this could be slow.
+1. **No incremental analysis** -- Every run re-analyzes the full git history within the `--since` window. For very large repos, this could be slow. However, analyzers run in parallel to reduce wall-clock time.
 
-2. **Single coverage file** -- The tool takes one Cobertura XML file. If you have multiple (e.g., per test project), merge them first with a tool like ReportGenerator.
+2. **Single coverage file** -- The `analyze` command takes one Cobertura XML file. If you have multiple (e.g., per test project), merge them first with ReportGenerator, or use the `scan` command which merges automatically.
 
 3. **C# only** -- Complexity analysis uses Roslyn's C# parser. F# and VB files are excluded from complexity scoring (though churn and coverage still apply).
 

@@ -8,6 +8,7 @@ public class AnalysisOptions
     public int Top { get; set; } = 20;
     public List<string> ExcludePatterns { get; set; } = [];
     public string? OutputPath { get; set; }
+    public string? BaselinePath { get; set; }
     public bool NoColor { get; set; }
 
     public static readonly string[] DefaultExclusions =
