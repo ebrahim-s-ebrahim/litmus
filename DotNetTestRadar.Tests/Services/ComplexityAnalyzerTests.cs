@@ -151,4 +151,23 @@ public class ComplexityAnalyzerTests
         result.FileComplexity.Should().HaveCount(1);
         _fileSystem.DidNotReceive().GetFiles("/repo", Arg.Any<string>(), Arg.Any<bool>());
     }
+
+    [Fact]
+    public void Analyze_WithProgressCallback_InvokesPerFile()
+    {
+        var projectDirs = new List<string> { "MyApp" };
+        var fullDir = Path.Combine("/repo", "MyApp");
+        var file1 = Path.Combine("/repo", "MyApp", "A.cs");
+        var file2 = Path.Combine("/repo", "MyApp", "B.cs");
+
+        _fileSystem.DirectoryExists(fullDir).Returns(true);
+        _fileSystem.GetFiles(fullDir, "*.cs", true).Returns([file1, file2]);
+        _fileSystem.ReadAllText(file1).Returns(TestFixtures.NoBranchCode);
+        _fileSystem.ReadAllText(file2).Returns(TestFixtures.NoBranchCode);
+
+        var callCount = 0;
+        _sut.Analyze("/repo", projectDirs, [], onFileProcessed: () => callCount++);
+
+        callCount.Should().Be(2);
+    }
 }

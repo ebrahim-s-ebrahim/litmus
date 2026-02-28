@@ -101,7 +101,8 @@ public class DependencyAnalyzer
         _fileSystem = fileSystem;
     }
 
-    public DependencyResult Analyze(string gitRoot, List<string> projectDirectories, List<string> excludePatterns)
+    public DependencyResult Analyze(string gitRoot, List<string> projectDirectories, List<string> excludePatterns,
+        Action? onFileProcessed = null)
     {
         var result = new DependencyResult();
 
@@ -118,7 +119,10 @@ public class DependencyAnalyzer
                 {
                     var relativePath = Path.GetRelativePath(gitRoot, file).Replace('\\', '/');
                     if (FileFilterHelper.MatchesAnyPattern(relativePath, excludePatterns))
+                    {
+                        onFileProcessed?.Invoke();
                         continue;
+                    }
 
                     var content = _fileSystem.ReadAllText(file);
                     var data = AnalyzeFile(content);
@@ -128,6 +132,8 @@ public class DependencyAnalyzer
                 {
                     result.SkippedFiles++;
                 }
+
+                onFileProcessed?.Invoke();
             }
         }
 

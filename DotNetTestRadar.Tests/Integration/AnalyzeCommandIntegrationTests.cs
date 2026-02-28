@@ -330,4 +330,22 @@ public class AnalyzeCommandIntegrationTests : IDisposable
                 "delta should be near zero when comparing identical runs");
         }
     }
+
+    [Fact]
+    public async Task FormatTable_WithProgress_CompletesSuccessfully()
+    {
+        // Default format is "table" which triggers progress bars.
+        // Verify the pipeline still completes correctly with progress enabled.
+        var results = await RunAndReadJsonResults(new AnalysisOptions
+        {
+            SolutionPath = _fixture.SolutionPath,
+            CoveragePath = _fixture.CoveragePath,
+            Since = DateTime.Today.AddYears(-1),
+            Top = 20,
+            NoColor = true,
+            Format = "table"
+        });
+
+        results.Should().HaveCount(3);
+    }
 }

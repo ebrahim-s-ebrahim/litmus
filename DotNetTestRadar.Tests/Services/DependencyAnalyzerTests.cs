@@ -465,4 +465,20 @@ public class DependencyAnalyzerTests
         result.Files.Keys.Should().ContainSingle()
             .Which.Should().Be("src/MyApp/Services/UserService.cs");
     }
+
+    [Fact]
+    public void Analyze_WithProgressCallback_InvokesPerFile()
+    {
+        var fs = Substitute.For<IFileSystem>();
+        fs.DirectoryExists(Arg.Any<string>()).Returns(true);
+        fs.GetFiles(Arg.Any<string>(), "*.cs", true)
+            .Returns(["/repo/proj/A.cs", "/repo/proj/B.cs", "/repo/proj/C.cs"]);
+        fs.ReadAllText(Arg.Any<string>()).Returns(TestFixtures.NoBranchCode);
+
+        var analyzer = new DependencyAnalyzer(fs);
+        var callCount = 0;
+        analyzer.Analyze("/repo", ["proj"], [], onFileProcessed: () => callCount++);
+
+        callCount.Should().Be(3);
+    }
 }

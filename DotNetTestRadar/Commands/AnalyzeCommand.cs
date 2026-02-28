@@ -201,28 +201,86 @@ public class AnalyzeCommand
             var complexityAnalyzer = new ComplexityAnalyzer(fileSystem);
             var dependencyAnalyzer = new DependencyAnalyzer(fileSystem);
 
-            var churnTask = Task.Run(() => churnAnalyzer.Analyze(
-                parseResult.GitRoot,
-                parseResult.SolutionDirectory,
-                parseResult.ProjectDirectories,
-                options.Since,
-                options.ExcludePatterns));
+            // Pre-count .cs files for progress tracking
+            var totalFiles = 0;
+            foreach (var projectDir in parseResult.ProjectDirectories)
+            {
+                var fullDir = Path.Combine(parseResult.GitRoot, projectDir);
+                if (fileSystem.DirectoryExists(fullDir))
+                    totalFiles += fileSystem.GetFiles(fullDir, "*.cs", recursive: true).Count();
+            }
 
-            var complexityTask = Task.Run(() => complexityAnalyzer.Analyze(
-                parseResult.GitRoot,
-                parseResult.ProjectDirectories,
-                effectivePatterns));
+            ChurnResult churnResult = null!;
+            ComplexityResult complexityResult = null!;
+            DependencyResult dependencyResult = null!;
 
-            var dependencyTask = Task.Run(() => dependencyAnalyzer.Analyze(
-                parseResult.GitRoot,
-                parseResult.ProjectDirectories,
-                effectivePatterns));
+            if (options.Format == "table" && totalFiles > 0)
+            {
+                await AnsiConsole.Progress()
+                    .AutoClear(true)
+                    .HideCompleted(false)
+                    .StartAsync(async ctx =>
+                    {
+                        var churnProgress = ctx.AddTask("Git churn", maxValue: 1);
+                        var complexityProgress = ctx.AddTask("Complexity analysis", maxValue: totalFiles);
+                        var dependencyProgress = ctx.AddTask("Dependency analysis", maxValue: totalFiles);
 
-            await Task.WhenAll(churnTask, complexityTask, dependencyTask);
+                        var ct = Task.Run(() =>
+                        {
+                            var result = churnAnalyzer.Analyze(
+                                parseResult.GitRoot,
+                                parseResult.SolutionDirectory,
+                                parseResult.ProjectDirectories,
+                                options.Since,
+                                options.ExcludePatterns);
+                            churnProgress.Increment(1);
+                            return result;
+                        });
 
-            var churnResult = churnTask.Result;
-            var complexityResult = complexityTask.Result;
-            var dependencyResult = dependencyTask.Result;
+                        var cxt = Task.Run(() => complexityAnalyzer.Analyze(
+                            parseResult.GitRoot,
+                            parseResult.ProjectDirectories,
+                            effectivePatterns,
+                            () => complexityProgress.Increment(1)));
+
+                        var dt = Task.Run(() => dependencyAnalyzer.Analyze(
+                            parseResult.GitRoot,
+                            parseResult.ProjectDirectories,
+                            effectivePatterns,
+                            () => dependencyProgress.Increment(1)));
+
+                        await Task.WhenAll(ct, cxt, dt);
+
+                        churnResult = ct.Result;
+                        complexityResult = cxt.Result;
+                        dependencyResult = dt.Result;
+                    });
+            }
+            else
+            {
+                var ct = Task.Run(() => churnAnalyzer.Analyze(
+                    parseResult.GitRoot,
+                    parseResult.SolutionDirectory,
+                    parseResult.ProjectDirectories,
+                    options.Since,
+                    options.ExcludePatterns));
+
+                var cxt = Task.Run(() => complexityAnalyzer.Analyze(
+                    parseResult.GitRoot,
+                    parseResult.ProjectDirectories,
+                    effectivePatterns));
+
+                var dt = Task.Run(() => dependencyAnalyzer.Analyze(
+                    parseResult.GitRoot,
+                    parseResult.ProjectDirectories,
+                    effectivePatterns));
+
+                await Task.WhenAll(ct, cxt, dt);
+
+                churnResult = ct.Result;
+                complexityResult = cxt.Result;
+                dependencyResult = dt.Result;
+            }
 
             // Step 4: Risk scoring + starting priority
             var riskScorer = new RiskScorer();
