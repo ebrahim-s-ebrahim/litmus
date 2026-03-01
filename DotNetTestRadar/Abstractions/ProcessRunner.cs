@@ -20,9 +20,12 @@ public class ProcessRunner : IProcessRunner
         using var process = Process.Start(startInfo)
             ?? throw new InvalidOperationException($"Failed to start process: {executable}");
 
-        var stdout = process.StandardOutput.ReadToEnd();
-        var stderr = process.StandardError.ReadToEnd();
+        // Read both streams asynchronously to prevent pipe buffer deadlock
+        var stdoutTask = process.StandardOutput.ReadToEndAsync();
+        var stderrTask = process.StandardError.ReadToEndAsync();
         process.WaitForExit();
+        var stdout = stdoutTask.Result;
+        var stderr = stderrTask.Result;
 
         if (process.ExitCode != 0)
             throw new InvalidOperationException(
