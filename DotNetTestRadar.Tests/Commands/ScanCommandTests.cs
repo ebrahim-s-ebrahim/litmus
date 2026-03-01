@@ -79,9 +79,10 @@ public class ScanCommandTests
         Invoke("--solution", "test.sln");
 
         // Verify we got past validation and actually ran dotnet test
-        _processRunner.Received().Run("dotnet",
+        _processRunner.Received().RunWithLiveOutput("dotnet",
             Arg.Is<string>(a => a.StartsWith("test ")),
-            Arg.Any<string>());
+            Arg.Any<string>(),
+            Arg.Any<Action<string>?>());
     }
 
     [Fact]
@@ -94,9 +95,10 @@ public class ScanCommandTests
 
         Invoke("--solution", "test.slnx");
 
-        _processRunner.Received().Run("dotnet",
+        _processRunner.Received().RunWithLiveOutput("dotnet",
             Arg.Is<string>(a => a.StartsWith("test ")),
-            Arg.Any<string>());
+            Arg.Any<string>(),
+            Arg.Any<Action<string>?>());
     }
 
     [Fact]
@@ -122,9 +124,10 @@ public class ScanCommandTests
 
         Invoke("--solution", "test.sln", "--tests-dir", "tests/MyTests.csproj");
 
-        _processRunner.Received().Run("dotnet",
+        _processRunner.Received().RunWithLiveOutput("dotnet",
             Arg.Is<string>(a => a.Contains("MyTests.csproj")),
-            Arg.Any<string>());
+            Arg.Any<string>(),
+            Arg.Any<Action<string>?>());
     }
 
     [Fact]
@@ -138,9 +141,10 @@ public class ScanCommandTests
 
         Invoke("--solution", "test.sln", "--tests-dir", "tests/UnitTests");
 
-        _processRunner.Received().Run("dotnet",
+        _processRunner.Received().RunWithLiveOutput("dotnet",
             Arg.Is<string>(a => a.Contains("tests/UnitTests")),
-            Arg.Any<string>());
+            Arg.Any<string>(),
+            Arg.Any<Action<string>?>());
     }
 
     [Fact]
@@ -198,9 +202,10 @@ public class ScanCommandTests
 
         Invoke("--solution", "test.sln", "--tests-dir", @"tests\UnitTests\");
 
-        _processRunner.Received().Run("dotnet",
+        _processRunner.Received().RunWithLiveOutput("dotnet",
             Arg.Is<string>(args => ExtractQuotedPath(args, "test ").EndsWith("UnitTests")),
-            Arg.Any<string>());
+            Arg.Any<string>(),
+            Arg.Any<Action<string>?>());
     }
 
     [Fact]
@@ -214,9 +219,10 @@ public class ScanCommandTests
 
         Invoke("--solution", "test.sln", "--tests-dir", "tests/UnitTests/");
 
-        _processRunner.Received().Run("dotnet",
+        _processRunner.Received().RunWithLiveOutput("dotnet",
             Arg.Is<string>(args => ExtractQuotedPath(args, "test ").EndsWith("UnitTests")),
-            Arg.Any<string>());
+            Arg.Any<string>(),
+            Arg.Any<Action<string>?>());
     }
 
     [Fact]
@@ -230,9 +236,10 @@ public class ScanCommandTests
 
         Invoke("--solution", "test.sln", "--tests-dir", "tests/UnitTests");
 
-        _processRunner.Received().Run("dotnet",
+        _processRunner.Received().RunWithLiveOutput("dotnet",
             Arg.Is<string>(args => ExtractQuotedPath(args, "test ").EndsWith("UnitTests")),
-            Arg.Any<string>());
+            Arg.Any<string>(),
+            Arg.Any<Action<string>?>());
     }
 
     // ── Test execution and coverage tests ───────────────────────────
@@ -247,9 +254,10 @@ public class ScanCommandTests
 
         Invoke("--solution", "test.sln");
 
-        _processRunner.Received().Run("dotnet",
+        _processRunner.Received().RunWithLiveOutput("dotnet",
             Arg.Is<string>(a => a.Contains("test.sln")),
-            Arg.Any<string>());
+            Arg.Any<string>(),
+            Arg.Any<Action<string>?>());
     }
 
     [Fact]
@@ -262,9 +270,10 @@ public class ScanCommandTests
 
         Invoke("--solution", "test.sln");
 
-        _processRunner.Received().Run("dotnet",
+        _processRunner.Received().RunWithLiveOutput("dotnet",
             Arg.Is<string>(a => a.Contains("XPlat Code Coverage")),
-            Arg.Any<string>());
+            Arg.Any<string>(),
+            Arg.Any<Action<string>?>());
     }
 
     [Fact]
@@ -277,9 +286,10 @@ public class ScanCommandTests
 
         Invoke("--solution", "test.sln");
 
-        _processRunner.Received().Run("dotnet",
+        _processRunner.Received().RunWithLiveOutput("dotnet",
             Arg.Is<string>(a => a.Contains("--results-directory")),
-            Arg.Any<string>());
+            Arg.Any<string>(),
+            Arg.Any<Action<string>?>());
     }
 
     [Fact]
@@ -300,10 +310,11 @@ public class ScanCommandTests
     {
         _fileSystem.FileExists("test.sln").Returns(true);
         SetupToolsAvailable();
-        _processRunner.Run("dotnet",
+        _processRunner.RunWithLiveOutput("dotnet",
             Arg.Is<string>(s => s.StartsWith("test ")),
-            Arg.Any<string>())
-            .Throws(new InvalidOperationException("Build failed: error CS1234"));
+            Arg.Any<string>(),
+            Arg.Any<Action<string>?>())
+            .Returns(1);
         _fileSystem.GetFiles(Arg.Any<string>(), "coverage.cobertura.xml", true)
             .Returns(Enumerable.Empty<string>());
 
@@ -317,10 +328,11 @@ public class ScanCommandTests
     {
         _fileSystem.FileExists("test.sln").Returns(true);
         SetupToolsAvailable();
-        _processRunner.Run("dotnet",
+        _processRunner.RunWithLiveOutput("dotnet",
             Arg.Is<string>(s => s.StartsWith("test ")),
-            Arg.Any<string>())
-            .Throws(new InvalidOperationException("Some tests failed"));
+            Arg.Any<string>(),
+            Arg.Any<Action<string>?>())
+            .Returns(1);
         _fileSystem.GetFiles(Arg.Any<string>(), "coverage.cobertura.xml", true)
             .Returns(new[] { "coverage.cobertura.xml" });
         _fileSystem.ReadAllText("coverage.cobertura.xml")

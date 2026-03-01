@@ -194,18 +194,46 @@ public class ScanCommand
                            $"--collect:\"XPlat Code Coverage\" " +
                            $"--results-directory \"{tempDir}\"";
 
+            // Show per-test results so the user sees continuous progress
+            if (options.Verbose)
+                testArgs += " --logger \"console;verbosity=detailed\"";
+            else if (!options.Quiet)
+                testArgs += " --logger \"console;verbosity=normal\"";
+
             string? testErrorDetail = null;
-            try
+            int exitCode;
+
+            if (options.Quiet)
             {
-                processRunner.Run("dotnet", testArgs, solutionDir);
-                if (!options.Quiet)
-                    AnsiConsole.MarkupLine("[green]Tests passed.[/]");
+                exitCode = processRunner.RunWithLiveOutput("dotnet", testArgs, solutionDir);
             }
-            catch (InvalidOperationException ex)
+            else if (options.Verbose)
+            {
+                exitCode = processRunner.RunWithLiveOutput("dotnet", testArgs, solutionDir,
+                    line => AnsiConsole.MarkupLine($"  [dim]{Markup.Escape(line)}[/]"));
+            }
+            else
+            {
+                // Spinner keeps animating so the user knows the tool isn't stuck
+                exitCode = 0;
+                AnsiConsole.Status()
+                    .Spinner(Spinner.Known.Dots)
+                    .Start("Running tests...", ctx =>
+                    {
+                        exitCode = processRunner.RunWithLiveOutput("dotnet", testArgs, solutionDir,
+                            line => ctx.Status(Markup.Escape(line)));
+                    });
+            }
+
+            if (exitCode != 0)
             {
                 // Tests failing is not a fatal error — coverage files may still be present
-                testErrorDetail = ex.Message;
+                testErrorDetail = $"dotnet test exited with code {exitCode}";
                 AnsiConsole.MarkupLine("[yellow]Warning:[/] Some tests failed. Coverage data may be incomplete.");
+            }
+            else if (!options.Quiet)
+            {
+                AnsiConsole.MarkupLine("[green]Tests passed.[/]");
             }
 
             // Discover all coverage.cobertura.xml files produced by the test run

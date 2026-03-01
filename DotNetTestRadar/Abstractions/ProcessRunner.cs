@@ -33,4 +33,39 @@ public class ProcessRunner : IProcessRunner
 
         return stdout;
     }
+
+    public int RunWithLiveOutput(string executable, string arguments, string workingDirectory,
+        Action<string>? onOutput = null)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = executable,
+            Arguments = arguments,
+            WorkingDirectory = workingDirectory,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        using var process = Process.Start(startInfo)
+            ?? throw new InvalidOperationException($"Failed to start process: {executable}");
+
+        process.OutputDataReceived += (_, e) =>
+        {
+            if (e.Data != null) onOutput?.Invoke(e.Data);
+        };
+        process.ErrorDataReceived += (_, e) =>
+        {
+            if (e.Data != null) onOutput?.Invoke(e.Data);
+        };
+
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+        // Use timeout overload (-1 = infinite) so we only wait for the process
+        // to exit, not for child-process pipe handles to close.
+        process.WaitForExit(-1);
+
+        return process.ExitCode;
+    }
 }
