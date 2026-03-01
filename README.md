@@ -22,7 +22,7 @@ The result is a ranked table sorted by *Starting Priority*: files that are both 
 
 ### Prerequisites
 
-- [.NET 10 SDK](https://dotnet.microsoft.com/download) or later
+- [.NET 8 SDK](https://dotnet.microsoft.com/download) or later
 - **git** installed and available on PATH
 - A **Cobertura XML** coverage report (produced by `coverlet`, `dotnet-coverage`, ReportGenerator, etc.)
 
@@ -318,11 +318,11 @@ The `scan` command does this merge automatically — it is generally the simpler
 
 ## Solution Format Support
 
-The tool supports both classic `.sln` files and the newer `.slnx` XML-based format introduced in .NET 10+. It automatically detects the format based on the file extension.
+The tool supports both classic `.sln` files and the newer `.slnx` XML-based format. It automatically detects the format based on the file extension.
 
 ## Requirements
 
-- .NET 10.0 or later
+- .NET 8.0 or later
 - Git must be installed and the solution must reside inside a git repository
 - `scan`: requires dotnet SDK with `coverlet.collector` in test projects
 - `analyze`: requires a pre-generated Cobertura XML coverage report

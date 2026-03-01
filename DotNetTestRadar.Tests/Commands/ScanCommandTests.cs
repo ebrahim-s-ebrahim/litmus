@@ -5,6 +5,7 @@ using DotNetTestRadar.Tests.Helpers;
 using FluentAssertions;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
+using Spectre.Console;
 
 namespace DotNetTestRadar.Tests.Commands;
 
@@ -12,6 +13,14 @@ public class ScanCommandTests
 {
     private readonly IFileSystem _fileSystem = Substitute.For<IFileSystem>();
     private readonly IProcessRunner _processRunner = Substitute.For<IProcessRunner>();
+
+    public ScanCommandTests()
+    {
+        AnsiConsole.Console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Out = new AnsiConsoleOutput(TextWriter.Null)
+        });
+    }
 
     private int Invoke(params string[] args)
     {

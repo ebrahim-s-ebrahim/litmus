@@ -4,11 +4,20 @@ using DotNetTestRadar.Models;
 using DotNetTestRadar.Output;
 using FluentAssertions;
 using NSubstitute;
+using Spectre.Console;
 
 namespace DotNetTestRadar.Tests.Services;
 
 public class ReportRendererTests
 {
+    public ReportRendererTests()
+    {
+        AnsiConsole.Console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Out = new AnsiConsoleOutput(TextWriter.Null)
+        });
+    }
+
     private static FileRiskReport MakeReport(string file, double startingPriority) => new()
     {
         File = file,
@@ -284,10 +293,10 @@ public class ReportRendererTests
     private static string CaptureConsoleOut(Action action)
     {
         var original = Console.Out;
+        var sw = new StringWriter();
+        Console.SetOut(sw);
         try
         {
-            using var sw = new StringWriter();
-            Console.SetOut(sw);
             action();
             return sw.ToString();
         }

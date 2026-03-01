@@ -4,6 +4,7 @@ using DotNetTestRadar.Commands;
 using DotNetTestRadar.Models;
 using DotNetTestRadar.Services;
 using FluentAssertions;
+using Spectre.Console;
 
 namespace DotNetTestRadar.Tests.Integration;
 
@@ -15,6 +16,10 @@ public class AnalyzeCommandIntegrationTests : IDisposable
 
     public AnalyzeCommandIntegrationTests()
     {
+        AnsiConsole.Console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Out = new AnsiConsoleOutput(TextWriter.Null)
+        });
         _fixture = new IntegrationTestFixture();
         _fileSystem = new FileSystemWrapper();
         _processRunner = new ProcessRunner();
