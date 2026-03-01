@@ -71,6 +71,19 @@ public class ScanCommand
             Description = "Suppress all output except errors (exit code only)"
         };
 
+        var timeoutOption = new Option<int>("--timeout")
+        {
+            Description = "Maximum time in minutes to wait for dotnet test to complete (default: 10)",
+            DefaultValueFactory = _ => 10
+        };
+
+        var coverageToolOption = new Option<string>("--coverage-tool")
+        {
+            Description = "Tool for collecting code coverage: coverlet (default) or dotnet-coverage",
+            DefaultValueFactory = _ => "coverlet"
+        };
+        coverageToolOption.AcceptOnlyFromAmong("coverlet", "dotnet-coverage");
+
         var command = new Command(
             "scan",
             "Run dotnet test, collect code coverage, and analyze the solution in one step")
@@ -85,7 +98,9 @@ public class ScanCommand
             noColorOption,
             formatOption,
             verboseOption,
-            quietOption
+            quietOption,
+            timeoutOption,
+            coverageToolOption
         };
 
         command.SetAction(parseResult =>
@@ -106,7 +121,9 @@ public class ScanCommand
             };
 
             var testsDir = parseResult.GetValue(testsDirOption);
-            return Execute(options, testsDir, fileSystem, processRunner);
+            var timeoutMinutes = parseResult.GetValue(timeoutOption);
+            var coverageTool = parseResult.GetValue(coverageToolOption)!;
+            return Execute(options, testsDir, timeoutMinutes, coverageTool, fileSystem, processRunner);
         });
 
         return command;
@@ -115,6 +132,8 @@ public class ScanCommand
     private static async Task<int> Execute(
         AnalysisOptions options,
         string? testsDir,
+        int timeoutMinutes,
+        string coverageTool,
         IFileSystem fileSystem,
         IProcessRunner processRunner)
     {
@@ -174,6 +193,22 @@ public class ScanCommand
             return 1;
         }
 
+        // Check dotnet-coverage availability if selected
+        if (coverageTool == "dotnet-coverage")
+        {
+            try
+            {
+                processRunner.Run("dotnet-coverage", "--version", ".");
+            }
+            catch
+            {
+                AnsiConsole.MarkupLine(
+                    "[red]Error:[/] dotnet-coverage must be installed when using --coverage-tool dotnet-coverage.\n" +
+                    "Install it with: dotnet tool install --global dotnet-coverage");
+                return 1;
+            }
+        }
+
         var solutionDir = Path.GetDirectoryName(Path.GetFullPath(options.SolutionPath)) ?? ".";
         // Trim trailing separators so that a path like "dir\" doesn't produce
         // an escaped quote (dir\") in the argument string, which breaks Windows
@@ -190,39 +225,59 @@ public class ScanCommand
             if (!options.Quiet)
                 AnsiConsole.MarkupLine("[bold]Step 1/2:[/] Running tests and collecting coverage...");
 
-            var testArgs = $"test \"{testTarget}\" " +
-                           $"--collect:\"XPlat Code Coverage\" " +
-                           $"--results-directory \"{tempDir}\"";
-
-            // Show per-test results so the user sees continuous progress
-            if (options.Verbose)
-                testArgs += " --logger \"console;verbosity=detailed\"";
-            else if (!options.Quiet)
-                testArgs += " --logger \"console;verbosity=normal\"";
-
             string? testErrorDetail = null;
             int exitCode;
+            var testTimeoutMs = timeoutMinutes * 60 * 1000;
 
-            if (options.Quiet)
+            if (coverageTool == "dotnet-coverage")
             {
-                exitCode = processRunner.RunWithLiveOutput("dotnet", testArgs, solutionDir);
-            }
-            else if (options.Verbose)
-            {
-                exitCode = processRunner.RunWithLiveOutput("dotnet", testArgs, solutionDir,
-                    line => AnsiConsole.MarkupLine($"  [dim]{Markup.Escape(line)}[/]"));
+                // dotnet-coverage runs externally — no data collector, avoids coverlet hangs
+                var coverageOutputPath = Path.Combine(tempDir, "coverage.cobertura.xml");
+                var dcArgs = $"collect \"dotnet test \\\"{testTarget}\\\"\" -f cobertura -o \"{coverageOutputPath}\"";
+
+                if (!options.Quiet && options.Verbose)
+                    AnsiConsole.MarkupLine("[dim]Using dotnet-coverage for collection[/]");
+
+                try
+                {
+                    exitCode = RunTestWithLiveOutput(processRunner, "dotnet-coverage", dcArgs,
+                        solutionDir, options, testTimeoutMs);
+                }
+                catch (TimeoutException)
+                {
+                    AnsiConsole.MarkupLine(
+                        $"[red]Error:[/] dotnet-coverage did not complete within {timeoutMinutes} minute(s) and was terminated.\n" +
+                        "Use --timeout <minutes> to increase the limit.");
+                    return 1;
+                }
             }
             else
             {
-                // Spinner keeps animating so the user knows the tool isn't stuck
-                exitCode = 0;
-                AnsiConsole.Status()
-                    .Spinner(Spinner.Known.Dots)
-                    .Start("Running tests...", ctx =>
-                    {
-                        exitCode = processRunner.RunWithLiveOutput("dotnet", testArgs, solutionDir,
-                            line => ctx.Status(Markup.Escape(line)));
-                    });
+                // Default: coverlet via dotnet test --collect
+                var testArgs = $"test \"{testTarget}\" " +
+                               $"--collect:\"XPlat Code Coverage\" " +
+                               $"--results-directory \"{tempDir}\"";
+
+                // Show per-test results so the user sees continuous progress
+                if (options.Verbose)
+                    testArgs += " --logger \"console;verbosity=detailed\"";
+                else if (!options.Quiet)
+                    testArgs += " --logger \"console;verbosity=normal\"";
+
+                try
+                {
+                    exitCode = RunTestWithLiveOutput(processRunner, "dotnet", testArgs,
+                        solutionDir, options, testTimeoutMs);
+                }
+                catch (TimeoutException)
+                {
+                    AnsiConsole.MarkupLine(
+                        $"[red]Error:[/] dotnet test did not complete within {timeoutMinutes} minute(s) and was terminated.\n" +
+                        "This is typically caused by the coverage data collector (coverlet) hanging.\n" +
+                        "Try using --coverage-tool dotnet-coverage as an alternative.\n" +
+                        "Use --timeout <minutes> to increase the limit.");
+                    return 1;
+                }
             }
 
             if (exitCode != 0)
@@ -248,7 +303,8 @@ public class ScanCommand
                 AnsiConsole.MarkupLine(
                     "[red]Error:[/] No coverage.cobertura.xml files were generated.\n" +
                     "Make sure your test project(s) reference the coverlet.collector package:\n" +
-                    "  dotnet add <test-project> package coverlet.collector");
+                    "  dotnet add <test-project> package coverlet.collector\n" +
+                    "Or try: --coverage-tool dotnet-coverage");
                 return 1;
             }
 
@@ -288,5 +344,35 @@ public class ScanCommand
                 // Don't fail the command if cleanup fails
             }
         }
+    }
+
+    private static int RunTestWithLiveOutput(
+        IProcessRunner processRunner, string executable, string args,
+        string workingDir, AnalysisOptions options, int timeoutMs)
+    {
+        if (options.Quiet)
+        {
+            return processRunner.RunWithLiveOutput(executable, args, workingDir,
+                timeoutMs: timeoutMs);
+        }
+
+        if (options.Verbose)
+        {
+            return processRunner.RunWithLiveOutput(executable, args, workingDir,
+                line => AnsiConsole.MarkupLine($"  [dim]{Markup.Escape(line)}[/]"),
+                timeoutMs);
+        }
+
+        // Spinner keeps animating so the user knows the tool isn't stuck
+        var exitCode = 0;
+        AnsiConsole.Status()
+            .Spinner(Spinner.Known.Dots)
+            .Start("Running tests...", ctx =>
+            {
+                exitCode = processRunner.RunWithLiveOutput(executable, args, workingDir,
+                    line => ctx.Status(Markup.Escape(line)),
+                    timeoutMs);
+            });
+        return exitCode;
     }
 }

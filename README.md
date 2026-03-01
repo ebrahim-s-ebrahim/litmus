@@ -64,11 +64,12 @@ dotnet-testradar analyze --solution MyApp.sln --coverage TestResults/.../coverag
 
 ### What `scan` does
 
-1. Runs `dotnet test` with the XPlat Code Coverage collector
-2. Discovers all `coverage.cobertura.xml` files produced (one per test project)
-3. Merges them (taking the highest coverage rate per source file)
-4. Runs the full analysis pipeline (git churn → complexity → seam detection → scoring)
-5. Cleans up the temporary test results directory
+1. Runs `dotnet test` with the XPlat Code Coverage collector (or `dotnet-coverage` if `--coverage-tool dotnet-coverage` is specified)
+2. Streams live output so you can see build progress and test results in real time
+3. Discovers all `coverage.cobertura.xml` files produced (one per test project)
+4. Merges them (taking the highest coverage rate per source file)
+5. Runs the full analysis pipeline (git churn → complexity → seam detection → scoring)
+6. Cleans up the temporary test results directory
 
 ## CLI Options
 
@@ -78,13 +79,15 @@ dotnet-testradar analyze --solution MyApp.sln --coverage TestResults/.../coverag
 |---|---|---|---|
 | `--solution` | Yes | -- | Path to a `.sln` or `.slnx` file |
 | `--tests-dir` | No | solution file | Directory or project to run `dotnet test` against |
+| `--coverage-tool` | No | coverlet | Coverage collector: `coverlet` or `dotnet-coverage` |
+| `--timeout` | No | 10 | Maximum minutes to wait for test execution |
 | `--since` | No | 1 year ago | Limit git history to commits after this date (ISO format) |
 | `--top` | No | 20 | Number of top files to display |
 | `--exclude` | No | -- | Glob pattern(s) to exclude files (repeatable) |
 | `--output` | No | -- | Export full results to a `.json` or `.csv` file |
 | `--baseline` | No | -- | Path to a previous JSON export to compare against |
 | `--format` | No | table | Output format for stdout: `table`, `json`, or `csv` |
-| `--verbose` | No | false | Show detailed intermediate scores for each file |
+| `--verbose` | No | false | Show detailed intermediate scores and live test output |
 | `--quiet` | No | false | Suppress all output except errors (exit code only) |
 | `--no-color` | No | false | Disable colored output |
 
@@ -128,6 +131,28 @@ dotnet-testradar scan \
   --solution src/MyApp.sln \
   --since 2025-08-01 \
   --top 10
+```
+
+### Use dotnet-coverage instead of coverlet
+
+If `scan` hangs or times out due to coverlet issues, use Microsoft's `dotnet-coverage` tool instead:
+
+```bash
+# Install dotnet-coverage first (one-time)
+dotnet tool install --global dotnet-coverage
+
+# Then run scan with --coverage-tool
+dotnet-testradar scan \
+  --solution MyApp.sln \
+  --coverage-tool dotnet-coverage
+```
+
+### Increase timeout for large solutions
+
+```bash
+dotnet-testradar scan \
+  --solution MyApp.sln \
+  --timeout 30
 ```
 
 ### Analyze with an existing coverage file, exclude generated code
@@ -320,11 +345,41 @@ The `scan` command does this merge automatically — it is generally the simpler
 
 The tool supports both classic `.sln` files and the newer `.slnx` XML-based format. It automatically detects the format based on the file extension.
 
+## Troubleshooting
+
+### `scan` hangs during test execution
+
+The most common cause is coverlet's data collector process hanging after tests complete. This is a known issue with certain versions of `coverlet.collector` and .NET SDK combinations.
+
+**Solutions (in order of preference):**
+
+1. **Use `dotnet-coverage` instead:** This avoids the coverlet data collector entirely.
+   ```bash
+   dotnet tool install --global dotnet-coverage
+   dotnet-testradar scan --solution MyApp.sln --coverage-tool dotnet-coverage
+   ```
+
+2. **Upgrade coverlet:** Update `coverlet.collector` in your test projects to the latest version.
+   ```bash
+   dotnet add <test-project> package coverlet.collector
+   ```
+
+3. **Increase the timeout:** If coverage just takes a long time (large solution), increase the default 10-minute limit.
+   ```bash
+   dotnet-testradar scan --solution MyApp.sln --timeout 30
+   ```
+
+4. **Use `analyze` instead:** Generate coverage separately and pass the file directly.
+   ```bash
+   dotnet-coverage collect "dotnet test MyApp.sln" -f cobertura -o coverage.xml
+   dotnet-testradar analyze --solution MyApp.sln --coverage coverage.xml
+   ```
+
 ## Requirements
 
 - .NET 8.0 or later
 - Git must be installed and the solution must reside inside a git repository
-- `scan`: requires dotnet SDK with `coverlet.collector` in test projects
+- `scan`: requires dotnet SDK with `coverlet.collector` in test projects (or `dotnet-coverage` installed globally when using `--coverage-tool dotnet-coverage`)
 - `analyze`: requires a pre-generated Cobertura XML coverage report
 
 ## License

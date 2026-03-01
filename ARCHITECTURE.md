@@ -267,8 +267,12 @@ public interface IFileSystem
 public interface IProcessRunner
 {
     string Run(string executable, string arguments, string workingDirectory);
+    int RunWithLiveOutput(string executable, string arguments, string workingDirectory,
+        Action<string>? onOutput = null, int timeoutMs = 0);
 }
 ```
+
+`Run` captures all output and returns stdout as a string. `RunWithLiveOutput` streams output line-by-line via a callback and supports a timeout that kills the entire process tree — used by `scan` for `dotnet test` where real-time feedback and hang protection are needed.
 
 These are injected via constructor parameters, not a DI container. The production implementations (`FileSystemWrapper`, `ProcessRunner`) are simple pass-throughs to `System.IO` and `System.Diagnostics.Process`.
 

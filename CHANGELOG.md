@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `--coverage-tool` option for `scan` command: choose between `coverlet` (default) and `dotnet-coverage` as the coverage collector
+- `--timeout` option for `scan` command: configurable time limit (default: 10 minutes) that kills the process tree if exceeded
+- Live output streaming during `dotnet test`: verbose mode shows per-test results, default mode shows a spinner with the latest output line
+- Troubleshooting section in README for coverlet hang issues
 - `--verbose` flag showing detailed intermediate scores per file (churn norm, coverage, complexity norm, all 6 dependency signal counts)
 - `--quiet` flag suppressing all output except errors and file export
 - Signal 5: async seam call detection (`await httpClient.GetAsync()`, `SaveChangesAsync`, etc.) with ×1.5 weight
@@ -21,6 +25,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pipeline parallelism: churn, complexity, and dependency analyzers now run concurrently via `Task.WhenAll`
 - Self-analysis dogfooding step in CI workflow — runs `dotnet-testradar analyze` against itself on every push
 - This CHANGELOG file
+
+### Fixed
+
+- Pipe buffer deadlock in `ProcessRunner` when `dotnet test` produces large stdout/stderr output (read both streams asynchronously)
+- `scan` command no longer hangs indefinitely when coverlet data collector outlives the `dotnet test` process (uses non-draining `WaitForExit` overload)
 
 ### Changed
 

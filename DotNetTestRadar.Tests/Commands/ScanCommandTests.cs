@@ -82,7 +82,7 @@ public class ScanCommandTests
         _processRunner.Received().RunWithLiveOutput("dotnet",
             Arg.Is<string>(a => a.StartsWith("test ")),
             Arg.Any<string>(),
-            Arg.Any<Action<string>?>());
+            Arg.Any<Action<string>?>(), Arg.Any<int>());
     }
 
     [Fact]
@@ -98,7 +98,7 @@ public class ScanCommandTests
         _processRunner.Received().RunWithLiveOutput("dotnet",
             Arg.Is<string>(a => a.StartsWith("test ")),
             Arg.Any<string>(),
-            Arg.Any<Action<string>?>());
+            Arg.Any<Action<string>?>(), Arg.Any<int>());
     }
 
     [Fact]
@@ -127,7 +127,7 @@ public class ScanCommandTests
         _processRunner.Received().RunWithLiveOutput("dotnet",
             Arg.Is<string>(a => a.Contains("MyTests.csproj")),
             Arg.Any<string>(),
-            Arg.Any<Action<string>?>());
+            Arg.Any<Action<string>?>(), Arg.Any<int>());
     }
 
     [Fact]
@@ -144,7 +144,7 @@ public class ScanCommandTests
         _processRunner.Received().RunWithLiveOutput("dotnet",
             Arg.Is<string>(a => a.Contains("tests/UnitTests")),
             Arg.Any<string>(),
-            Arg.Any<Action<string>?>());
+            Arg.Any<Action<string>?>(), Arg.Any<int>());
     }
 
     [Fact]
@@ -205,7 +205,7 @@ public class ScanCommandTests
         _processRunner.Received().RunWithLiveOutput("dotnet",
             Arg.Is<string>(args => ExtractQuotedPath(args, "test ").EndsWith("UnitTests")),
             Arg.Any<string>(),
-            Arg.Any<Action<string>?>());
+            Arg.Any<Action<string>?>(), Arg.Any<int>());
     }
 
     [Fact]
@@ -222,7 +222,7 @@ public class ScanCommandTests
         _processRunner.Received().RunWithLiveOutput("dotnet",
             Arg.Is<string>(args => ExtractQuotedPath(args, "test ").EndsWith("UnitTests")),
             Arg.Any<string>(),
-            Arg.Any<Action<string>?>());
+            Arg.Any<Action<string>?>(), Arg.Any<int>());
     }
 
     [Fact]
@@ -239,7 +239,7 @@ public class ScanCommandTests
         _processRunner.Received().RunWithLiveOutput("dotnet",
             Arg.Is<string>(args => ExtractQuotedPath(args, "test ").EndsWith("UnitTests")),
             Arg.Any<string>(),
-            Arg.Any<Action<string>?>());
+            Arg.Any<Action<string>?>(), Arg.Any<int>());
     }
 
     // ── Test execution and coverage tests ───────────────────────────
@@ -257,7 +257,7 @@ public class ScanCommandTests
         _processRunner.Received().RunWithLiveOutput("dotnet",
             Arg.Is<string>(a => a.Contains("test.sln")),
             Arg.Any<string>(),
-            Arg.Any<Action<string>?>());
+            Arg.Any<Action<string>?>(), Arg.Any<int>());
     }
 
     [Fact]
@@ -273,7 +273,7 @@ public class ScanCommandTests
         _processRunner.Received().RunWithLiveOutput("dotnet",
             Arg.Is<string>(a => a.Contains("XPlat Code Coverage")),
             Arg.Any<string>(),
-            Arg.Any<Action<string>?>());
+            Arg.Any<Action<string>?>(), Arg.Any<int>());
     }
 
     [Fact]
@@ -289,7 +289,7 @@ public class ScanCommandTests
         _processRunner.Received().RunWithLiveOutput("dotnet",
             Arg.Is<string>(a => a.Contains("--results-directory")),
             Arg.Any<string>(),
-            Arg.Any<Action<string>?>());
+            Arg.Any<Action<string>?>(), Arg.Any<int>());
     }
 
     [Fact]
@@ -313,7 +313,7 @@ public class ScanCommandTests
         _processRunner.RunWithLiveOutput("dotnet",
             Arg.Is<string>(s => s.StartsWith("test ")),
             Arg.Any<string>(),
-            Arg.Any<Action<string>?>())
+            Arg.Any<Action<string>?>(), Arg.Any<int>())
             .Returns(1);
         _fileSystem.GetFiles(Arg.Any<string>(), "coverage.cobertura.xml", true)
             .Returns(Enumerable.Empty<string>());
@@ -331,7 +331,7 @@ public class ScanCommandTests
         _processRunner.RunWithLiveOutput("dotnet",
             Arg.Is<string>(s => s.StartsWith("test ")),
             Arg.Any<string>(),
-            Arg.Any<Action<string>?>())
+            Arg.Any<Action<string>?>(), Arg.Any<int>())
             .Returns(1);
         _fileSystem.GetFiles(Arg.Any<string>(), "coverage.cobertura.xml", true)
             .Returns(new[] { "coverage.cobertura.xml" });

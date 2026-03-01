@@ -35,7 +35,7 @@ public class ProcessRunner : IProcessRunner
     }
 
     public int RunWithLiveOutput(string executable, string arguments, string workingDirectory,
-        Action<string>? onOutput = null)
+        Action<string>? onOutput = null, int timeoutMs = 0)
     {
         var startInfo = new ProcessStartInfo
         {
@@ -62,9 +62,14 @@ public class ProcessRunner : IProcessRunner
 
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
-        // Use timeout overload (-1 = infinite) so we only wait for the process
-        // to exit, not for child-process pipe handles to close.
-        process.WaitForExit(-1);
+
+        var waitTime = timeoutMs > 0 ? timeoutMs : int.MaxValue;
+        if (!process.WaitForExit(waitTime))
+        {
+            try { process.Kill(entireProcessTree: true); } catch { /* best effort */ }
+            throw new TimeoutException(
+                $"Process '{executable}' did not exit within {TimeSpan.FromMilliseconds(timeoutMs).TotalMinutes:F0} minute(s) and was terminated.");
+        }
 
         return process.ExitCode;
     }
