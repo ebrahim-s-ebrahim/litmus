@@ -21,7 +21,7 @@
     <PackageIcon>icon.png</PackageIcon>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageProjectUrl>https://github.com/ebrahim-s-ebrahim/testradar</PackageProjectUrl>
+    <PackageProjectUrl>https://ebrahim-s-ebrahim.github.io/DotNetTestRadar</PackageProjectUrl>
     <RepositoryUrl>https://github.com/ebrahim-s-ebrahim/testradar.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
   </PropertyGroup>
