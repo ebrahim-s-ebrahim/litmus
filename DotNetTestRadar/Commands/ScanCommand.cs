@@ -175,7 +175,11 @@ public class ScanCommand
         }
 
         var solutionDir = Path.GetDirectoryName(Path.GetFullPath(options.SolutionPath)) ?? ".";
-        var testTarget = testsDir ?? options.SolutionPath;
+        // Trim trailing separators so that a path like "dir\" doesn't produce
+        // an escaped quote (dir\") in the argument string, which breaks Windows
+        // command-line parsing.
+        var testTarget = (testsDir ?? options.SolutionPath)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         var tempDir = Path.Combine(Path.GetTempPath(), $"testradar-{Guid.NewGuid():N}");
 
         try
@@ -190,15 +194,17 @@ public class ScanCommand
                            $"--collect:\"XPlat Code Coverage\" " +
                            $"--results-directory \"{tempDir}\"";
 
+            string? testErrorDetail = null;
             try
             {
                 processRunner.Run("dotnet", testArgs, solutionDir);
                 if (!options.Quiet)
                     AnsiConsole.MarkupLine("[green]Tests passed.[/]");
             }
-            catch (InvalidOperationException)
+            catch (InvalidOperationException ex)
             {
                 // Tests failing is not a fatal error — coverage files may still be present
+                testErrorDetail = ex.Message;
                 AnsiConsole.MarkupLine("[yellow]Warning:[/] Some tests failed. Coverage data may be incomplete.");
             }
 
@@ -209,6 +215,8 @@ public class ScanCommand
 
             if (coverageFiles.Count == 0)
             {
+                if (testErrorDetail != null)
+                    AnsiConsole.MarkupLine($"[dim]{Markup.Escape(testErrorDetail)}[/]");
                 AnsiConsole.MarkupLine(
                     "[red]Error:[/] No coverage.cobertura.xml files were generated.\n" +
                     "Make sure your test project(s) reference the coverlet.collector package:\n" +
