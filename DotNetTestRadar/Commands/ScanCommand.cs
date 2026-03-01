@@ -363,16 +363,26 @@ public class ScanCommand
                 timeoutMs);
         }
 
-        // Spinner keeps animating so the user knows the tool isn't stuck
+        // Spinner keeps animating so the user knows the tool isn't stuck.
+        // Fall back to plain output if the console doesn't support interactive mode
+        // (e.g. redirected output or concurrent Spectre.Console operations).
         var exitCode = 0;
-        AnsiConsole.Status()
-            .Spinner(Spinner.Known.Dots)
-            .Start("Running tests...", ctx =>
-            {
-                exitCode = processRunner.RunWithLiveOutput(executable, args, workingDir,
-                    line => ctx.Status(Markup.Escape(line)),
-                    timeoutMs);
-            });
+        try
+        {
+            AnsiConsole.Status()
+                .Spinner(Spinner.Known.Dots)
+                .Start("Running tests...", ctx =>
+                {
+                    exitCode = processRunner.RunWithLiveOutput(executable, args, workingDir,
+                        line => ctx.Status(Markup.Escape(line)),
+                        timeoutMs);
+                });
+        }
+        catch (InvalidOperationException)
+        {
+            exitCode = processRunner.RunWithLiveOutput(executable, args, workingDir,
+                timeoutMs: timeoutMs);
+        }
         return exitCode;
     }
 }
