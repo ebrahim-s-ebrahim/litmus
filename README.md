@@ -1,8 +1,8 @@
-# DotNetTestRadar
+# Litmus
 
-[![NuGet](https://img.shields.io/nuget/v/DotNetTestRadar.svg?include_prereleases)](https://www.nuget.org/packages/DotNetTestRadar)
-[![NuGet Downloads](https://img.shields.io/nuget/dt/DotNetTestRadar.svg?include_prereleases)](https://www.nuget.org/packages/DotNetTestRadar)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/ebrahim-s-ebrahim/testradar/blob/main/LICENSE)
+[![NuGet](https://img.shields.io/nuget/v/dotnet-litmus.svg?include_prereleases)](https://www.nuget.org/packages/dotnet-litmus)
+[![NuGet Downloads](https://img.shields.io/nuget/dt/dotnet-litmus.svg?include_prereleases)](https://www.nuget.org/packages/dotnet-litmus)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/ebrahim-s-ebrahim/litmus/blob/main/LICENSE)
 
 A .NET global CLI tool that answers two complementary questions when adding tests to a legacy codebase:
 
@@ -30,16 +30,16 @@ The result is a ranked table sorted by *Starting Priority*: files that are both 
 
 ```bash
 # Pack the tool
-dotnet pack DotNetTestRadar/DotNetTestRadar.csproj -c Release
+dotnet pack Litmus/Litmus.csproj -c Release
 
 # Install as a global tool from the local package
-dotnet tool install --global --add-source DotNetTestRadar/bin/Release DotNetTestRadar
+dotnet tool install --global --add-source Litmus/bin/Release dotnet-litmus
 
 # Or install from nuget.org (after publishing)
-dotnet tool install --global DotNetTestRadar
+dotnet tool install --global dotnet-litmus
 
 # Or run directly without installing
-dotnet run --project DotNetTestRadar -- analyze --solution path/to/YourApp.sln --coverage coverage.xml
+dotnet run --project Litmus -- analyze --solution path/to/YourApp.sln --coverage coverage.xml
 ```
 
 ### Two ways to run
@@ -47,7 +47,7 @@ dotnet run --project DotNetTestRadar -- analyze --solution path/to/YourApp.sln -
 **Option A — One step with `scan` (recommended for getting started):**
 
 ```bash
-dotnet-testradar scan --solution MyApp.sln
+dotnet-litmus scan --solution MyApp.sln
 ```
 
 This runs `dotnet test`, collects coverage automatically, then runs the full analysis. No need to generate a coverage file first.
@@ -59,7 +59,7 @@ This runs `dotnet test`, collects coverage automatically, then runs the full ana
 dotnet test --collect:"XPlat Code Coverage"
 
 # Then analyze
-dotnet-testradar analyze --solution MyApp.sln --coverage TestResults/.../coverage.cobertura.xml
+dotnet-litmus analyze --solution MyApp.sln --coverage TestResults/.../coverage.cobertura.xml
 ```
 
 ### What `scan` does
@@ -112,13 +112,13 @@ dotnet-testradar analyze --solution MyApp.sln --coverage TestResults/.../coverag
 ### Quickest start — run tests and analyze in one command
 
 ```bash
-dotnet-testradar scan --solution MyApp.sln
+dotnet-litmus scan --solution MyApp.sln
 ```
 
 ### Scan with a specific test directory, export to JSON
 
 ```bash
-dotnet-testradar scan \
+dotnet-litmus scan \
   --solution MyApp.sln \
   --tests-dir tests/MyApp.Tests \
   --output report.json
@@ -127,7 +127,7 @@ dotnet-testradar scan \
 ### Scan the last 6 months, show top 10
 
 ```bash
-dotnet-testradar scan \
+dotnet-litmus scan \
   --solution src/MyApp.sln \
   --since 2025-08-01 \
   --top 10
@@ -142,7 +142,7 @@ If `scan` hangs or times out due to coverlet issues, use Microsoft's `dotnet-cov
 dotnet tool install --global dotnet-coverage
 
 # Then run scan with --coverage-tool
-dotnet-testradar scan \
+dotnet-litmus scan \
   --solution MyApp.sln \
   --coverage-tool dotnet-coverage
 ```
@@ -150,7 +150,7 @@ dotnet-testradar scan \
 ### Increase timeout for large solutions
 
 ```bash
-dotnet-testradar scan \
+dotnet-litmus scan \
   --solution MyApp.sln \
   --timeout 30
 ```
@@ -158,7 +158,7 @@ dotnet-testradar scan \
 ### Analyze with an existing coverage file, exclude generated code
 
 ```bash
-dotnet-testradar analyze \
+dotnet-litmus analyze \
   --solution MyApp.sln \
   --coverage coverage.xml \
   --exclude "*.Generated.cs" \
@@ -170,13 +170,13 @@ dotnet-testradar analyze \
 
 ```bash
 # First run: save a baseline
-dotnet-testradar analyze \
+dotnet-litmus analyze \
   --solution MyApp.sln \
   --coverage coverage.xml \
   --output baseline.json
 
 # Later: compare current state against the baseline
-dotnet-testradar analyze \
+dotnet-litmus analyze \
   --solution MyApp.sln \
   --coverage coverage.xml \
   --baseline baseline.json
@@ -188,13 +188,13 @@ When `--baseline` is provided, a **Delta** column appears in the table showing h
 
 ```bash
 # Get the top 5 files as JSON and filter with jq
-dotnet-testradar analyze \
+dotnet-litmus analyze \
   --solution MyApp.sln \
   --coverage coverage.xml \
   --format json | jq '.[].file'
 
 # Export CSV to stdout for further processing
-dotnet-testradar analyze \
+dotnet-litmus analyze \
   --solution MyApp.sln \
   --coverage coverage.xml \
   --format csv > results.csv
@@ -203,7 +203,7 @@ dotnet-testradar analyze \
 ### Pipe-friendly plain output
 
 ```bash
-dotnet-testradar analyze \
+dotnet-litmus analyze \
   --solution MyApp.sln \
   --coverage coverage.xml \
   --no-color \
@@ -336,7 +336,7 @@ This creates a `coverage.cobertura.xml` file inside `TestResults/`. For multiple
 ```bash
 dotnet tool install -g dotnet-reportgenerator-globaltool
 reportgenerator -reports:"**/coverage.cobertura.xml" -targetdir:"merged" -reporttypes:Cobertura
-dotnet-testradar analyze --solution MyApp.sln --coverage merged/Cobertura.xml
+dotnet-litmus analyze --solution MyApp.sln --coverage merged/Cobertura.xml
 ```
 
 The `scan` command does this merge automatically — it is generally the simpler option.
@@ -356,7 +356,7 @@ The most common cause is coverlet's data collector process hanging after tests c
 1. **Use `dotnet-coverage` instead:** This avoids the coverlet data collector entirely.
    ```bash
    dotnet tool install --global dotnet-coverage
-   dotnet-testradar scan --solution MyApp.sln --coverage-tool dotnet-coverage
+   dotnet-litmus scan --solution MyApp.sln --coverage-tool dotnet-coverage
    ```
 
 2. **Upgrade coverlet:** Update `coverlet.collector` in your test projects to the latest version.
@@ -366,13 +366,13 @@ The most common cause is coverlet's data collector process hanging after tests c
 
 3. **Increase the timeout:** If coverage just takes a long time (large solution), increase the default 10-minute limit.
    ```bash
-   dotnet-testradar scan --solution MyApp.sln --timeout 30
+   dotnet-litmus scan --solution MyApp.sln --timeout 30
    ```
 
 4. **Use `analyze` instead:** Generate coverage separately and pass the file directly.
    ```bash
    dotnet-coverage collect "dotnet test MyApp.sln" -f cobertura -o coverage.xml
-   dotnet-testradar analyze --solution MyApp.sln --coverage coverage.xml
+   dotnet-litmus analyze --solution MyApp.sln --coverage coverage.xml
    ```
 
 ## Requirements
