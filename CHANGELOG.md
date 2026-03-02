@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--baseline <path.json>` option for comparing against a previous analysis run (Delta column, summary line)
 - Integration tests exercising the full `analyze` pipeline with a real temp git repo
 - Pipeline parallelism: churn, complexity, and dependency analyzers now run concurrently via `Task.WhenAll`
-- Self-analysis dogfooding step in CI workflow — runs `dotnet-testradar analyze` against itself on every push
+- Self-analysis dogfooding step in CI workflow — runs `dotnet-litmus analyze` against itself on every push
 - This CHANGELOG file
 
 ### Fixed
