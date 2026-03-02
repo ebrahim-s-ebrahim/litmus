@@ -241,7 +241,7 @@ The tool produces a table like this:
 
 | Row Color | Meaning |
 |---|---|
-| Green | High priority — risky and testable now |
+| Red | High priority — risky and testable now |
 | Yellow | Medium priority — plan for next sprint |
 | Default | Low priority — backlog or too entangled |
 

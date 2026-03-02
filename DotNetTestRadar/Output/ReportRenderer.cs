@@ -70,7 +70,7 @@ public class ReportRenderer
             // Row color is driven by PriorityLevel — the actionable starting point
             var rowStyle = r.PriorityLevel switch
             {
-                "High" when !noColor => "green",
+                "High" when !noColor => "red",
                 "Medium" when !noColor => "yellow",
                 _ => "default"
             };
