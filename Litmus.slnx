@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Litmus.Tests/Litmus.Tests.csproj" />
+  <Project Path="Litmus/Litmus.csproj" />
+</Solution>
