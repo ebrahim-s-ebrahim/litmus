@@ -374,7 +374,7 @@ public class ScanCommand
                 .Start("Running tests...", ctx =>
                 {
                     exitCode = processRunner.RunWithLiveOutput(executable, args, workingDir,
-                        line => ctx.Status(Markup.Escape(line)),
+                        line => { if (!string.IsNullOrWhiteSpace(line)) ctx.Status(Markup.Escape(line)); },
                         timeoutMs);
                 });
         }
