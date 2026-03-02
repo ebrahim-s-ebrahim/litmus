@@ -33,8 +33,8 @@ jobs:
       run: |
         COVERAGE=$(find ./TestResults -name "coverage.cobertura.xml" | head -1)
         if [ -n "$COVERAGE" ]; then
-          dotnet run --project DotNetTestRadar -c Release -- analyze \
-            --solution DotNetTestRadar.slnx \
+          dotnet run --project Litmus -c Release -- analyze \
+            --solution Litmus.slnx \
             --coverage "$COVERAGE" \
             --format json --top 10 > /dev/null
           echo "Self-analysis completed successfully"
@@ -63,7 +63,7 @@ jobs:
         dotnet-version: 8.0.x
 
     - name: Pack
-      run: dotnet pack DotNetTestRadar/DotNetTestRadar.csproj -c Release -o ./nupkg
+      run: dotnet pack Litmus/Litmus.csproj -c Release -o ./nupkg
 
     - name: NuGet login (OIDC)
       uses: NuGet/login@v1

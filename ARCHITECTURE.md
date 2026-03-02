@@ -1,12 +1,12 @@
 # Architecture & Technical Deep Dive
 
-This document covers the internal design of DotNetTestRadar: how each component works, why specific decisions were made, and the tradeoffs involved.
+This document covers the internal design of Litmus: how each component works, why specific decisions were made, and the tradeoffs involved.
 
 ## Project Structure
 
 ```
-DotNetTestRadar.slnx
-├── DotNetTestRadar/                   # Main CLI tool
+Litmus.slnx
+├── Litmus/                   # Main CLI tool
 │   ├── Abstractions/                  # Interfaces for I/O boundaries
 │   │   ├── IFileSystem.cs
 │   │   ├── IProcessRunner.cs
@@ -29,7 +29,7 @@ DotNetTestRadar.slnx
 │   │   ├── FileFilterHelper.cs       # Glob pattern matching
 │   │   └── RiskScorer.cs              # Final risk + priority formula
 │   └── Program.cs                     # Entry point
-└── DotNetTestRadar.Tests/             # Tests (xUnit)
+└── Litmus.Tests/             # Tests (xUnit)
     ├── Helpers/
     │   └── TestFixtures.cs            # Shared test data
     ├── Integration/

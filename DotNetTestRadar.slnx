@@ -1,4 +1,0 @@
-<Solution>
-  <Project Path="DotNetTestRadar.Tests/DotNetTestRadar.Tests.csproj" />
-  <Project Path="DotNetTestRadar/DotNetTestRadar.csproj" />
-</Solution>
