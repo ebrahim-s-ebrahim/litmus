@@ -9,6 +9,7 @@ using Spectre.Console;
 
 namespace Litmus.Tests.Commands;
 
+[Collection("AnsiConsole")]
 public class ScanCommandTests
 {
     private readonly IFileSystem _fileSystem = Substitute.For<IFileSystem>();
@@ -163,6 +164,18 @@ public class ScanCommandTests
         SetupToolsAvailable();
 
         var result = Invoke("--solution", "test.sln", "--baseline", "missing.json");
+
+        result.Should().Be(1);
+    }
+
+    [Fact]
+    public void BaselineFileNotJson_ReturnsError()
+    {
+        _fileSystem.FileExists("test.sln").Returns(true);
+        _fileSystem.FileExists("report.csv").Returns(true);
+        SetupToolsAvailable();
+
+        var result = Invoke("--solution", "test.sln", "--baseline", "report.csv");
 
         result.Should().Be(1);
     }

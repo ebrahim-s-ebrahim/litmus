@@ -8,6 +8,7 @@ using Spectre.Console;
 
 namespace Litmus.Tests.Services;
 
+[Collection("AnsiConsole")]
 public class ReportRendererTests
 {
     public ReportRendererTests()
@@ -290,6 +291,37 @@ public class ReportRendererTests
         header.Should().Contain("isRegistrationFile");
     }
 
+    [Fact]
+    public void Render_WithSinceDate_IncludesDateInSummary()
+    {
+        var reports = new List<FileRiskReport> { MakeReport("A.cs", 0.8) };
+        var sinceDate = new DateTime(2025, 6, 15);
+
+        var output = CaptureAnsiConsole(() =>
+        {
+            var renderer = new ReportRenderer(Substitute.For<IFileSystem>());
+            renderer.Render(reports, 20, noColor: true, outputPath: null, skippedFiles: 0,
+                sinceDate: sinceDate);
+        });
+
+        output.Should().Contain("since 2025-06-15");
+    }
+
+    [Fact]
+    public void Render_WithoutSinceDate_OmitsDateInSummary()
+    {
+        var reports = new List<FileRiskReport> { MakeReport("A.cs", 0.8) };
+
+        var output = CaptureAnsiConsole(() =>
+        {
+            var renderer = new ReportRenderer(Substitute.For<IFileSystem>());
+            renderer.Render(reports, 20, noColor: true, outputPath: null, skippedFiles: 0);
+        });
+
+        output.Should().Contain("1 files analyzed.");
+        output.Should().NotContain("since");
+    }
+
     private static string CaptureConsoleOut(Action action)
     {
         var original = Console.Out;
@@ -303,6 +335,27 @@ public class ReportRendererTests
         finally
         {
             Console.SetOut(original);
+        }
+    }
+
+    private static string CaptureAnsiConsole(Action action)
+    {
+        var previous = AnsiConsole.Console;
+        var sw = new StringWriter();
+        AnsiConsole.Console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Out = new AnsiConsoleOutput(sw),
+            ColorSystem = ColorSystemSupport.NoColors,
+            Interactive = InteractionSupport.No
+        });
+        try
+        {
+            action();
+            return sw.ToString();
+        }
+        finally
+        {
+            AnsiConsole.Console = previous;
         }
     }
 }

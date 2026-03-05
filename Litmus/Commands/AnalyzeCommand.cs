@@ -149,10 +149,20 @@ public class AnalyzeCommand
         }
 
         // Validate baseline file if provided
-        if (options.BaselinePath != null && !fileSystem.FileExists(options.BaselinePath))
+        if (options.BaselinePath != null)
         {
-            AnsiConsole.MarkupLine("[red]Error:[/] Baseline file not found: " + options.BaselinePath);
-            return 1;
+            if (!fileSystem.FileExists(options.BaselinePath))
+            {
+                AnsiConsole.MarkupLine("[red]Error:[/] Baseline file not found: " + options.BaselinePath);
+                return 1;
+            }
+            if (!options.BaselinePath.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+            {
+                AnsiConsole.MarkupLine(
+                    "[red]Error:[/] --baseline requires a JSON file (from a previous --output report.json run).\n" +
+                    $"The file '{Markup.Escape(Path.GetFileName(options.BaselinePath))}' has an unsupported extension.");
+                return 1;
+            }
         }
 
         // Check git availability
@@ -345,26 +355,40 @@ public class AnalyzeCommand
                 }
             }
 
+            // Identify files with no coverage entry (before rendering, so we can warn early)
+            var filesWithNoCoverageEntry = reports
+                .Where(r => r.CoverageRate == 0.0 &&
+                       !coverageResult.FileCoverage.Keys.Any(k =>
+                           k.EndsWith(r.File.Replace('\\', '/'), StringComparison.OrdinalIgnoreCase) ||
+                           r.File.Replace('\\', '/').EndsWith(k, StringComparison.OrdinalIgnoreCase)))
+                .Select(r => r.File)
+                .ToList();
+
+            // Early warning if most files have no coverage entry — likely a configuration issue
+            if (!options.Quiet && filesWithNoCoverageEntry.Count > 0)
+            {
+                var mismatchPct = (double)filesWithNoCoverageEntry.Count / reports.Count * 100;
+                if (mismatchPct > 25)
+                {
+                    AnsiConsole.MarkupLine(
+                        $"\n[bold yellow]Warning:[/] {filesWithNoCoverageEntry.Count} of {reports.Count} files ({mismatchPct:F0}%) had no entry in the coverage report.\n" +
+                        "This usually means the coverage file doesn't match the solution structure.\n" +
+                        "Check that the coverage was generated from the same solution.\n");
+                }
+            }
+
             // Step 5: Render
             var renderer = new ReportRenderer(fileSystem);
             var totalSkippedFiles = complexityResult.SkippedFiles + dependencyResult.SkippedFiles;
             renderer.Render(reports, options.Top, options.NoColor, options.OutputPath, totalSkippedFiles, baseline,
-                options.Format, options.Verbose, options.Quiet);
+                options.Format, options.Verbose, options.Quiet, options.Since);
 
             if (!options.Quiet)
             {
-                // Warn about files that had no entry in the coverage report
-                var filesWithNoCoverageEntry = reports
-                    .Where(r => r.CoverageRate == 0.0 &&
-                           !coverageResult.FileCoverage.Keys.Any(k =>
-                               k.EndsWith(r.File.Replace('\\', '/'), StringComparison.OrdinalIgnoreCase) ||
-                               r.File.Replace('\\', '/').EndsWith(k, StringComparison.OrdinalIgnoreCase)))
-                    .Select(r => r.File)
-                    .ToList();
-
+                // List individual files with no coverage entry (post-table detail)
                 if (filesWithNoCoverageEntry.Count > 0)
                 {
-                    AnsiConsole.MarkupLine($"\n[yellow]Warning:[/] {filesWithNoCoverageEntry.Count} file(s) had no entry in the coverage report (treated as 0% coverage):");
+                    AnsiConsole.MarkupLine($"\n[yellow]Note:[/] {filesWithNoCoverageEntry.Count} file(s) had no entry in the coverage report (treated as 0% coverage):");
                     foreach (var f in filesWithNoCoverageEntry.Take(10))
                     {
                         AnsiConsole.MarkupLine($"  - {f.EscapeMarkup()}");

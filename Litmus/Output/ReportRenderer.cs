@@ -18,7 +18,7 @@ public class ReportRenderer
 
     public void Render(List<FileRiskReport> reports, int top, bool noColor, string? outputPath, int skippedFiles,
         Dictionary<string, double>? baseline = null, string format = "table",
-        bool verbose = false, bool quiet = false)
+        bool verbose = false, bool quiet = false, DateTime? sinceDate = null)
     {
         // Structured stdout formats: write JSON or CSV to Console.Out and skip the table
         if (format is "json" or "csv")
@@ -120,7 +120,8 @@ public class ReportRenderer
         var mediumPriorityCount = reports.Count(r => r.PriorityLevel == "Medium");
         var highRiskNeedSeams = reports.Count(r => r.RiskLevel == "High" && r.PriorityLevel != "High");
 
-        var summary = $"{reports.Count} files analyzed. {highPriorityCount} high-priority (start today), {mediumPriorityCount} medium-priority (next sprint).";
+        var sinceStr = sinceDate.HasValue ? $" since {sinceDate.Value:yyyy-MM-dd}" : "";
+        var summary = $"{reports.Count} files analyzed{sinceStr}. {highPriorityCount} high-priority (start today), {mediumPriorityCount} medium-priority (next sprint).";
         if (highRiskNeedSeams > 0)
             summary += $" {highRiskNeedSeams} high-risk file(s) need seam introduction before testing.";
         if (skippedFiles > 0)

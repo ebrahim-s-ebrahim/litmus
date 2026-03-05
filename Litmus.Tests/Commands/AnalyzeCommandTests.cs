@@ -8,6 +8,7 @@ using Spectre.Console;
 
 namespace Litmus.Tests.Commands;
 
+[Collection("AnsiConsole")]
 public class AnalyzeCommandTests
 {
     private readonly IFileSystem _fileSystem = Substitute.For<IFileSystem>();
@@ -122,6 +123,20 @@ public class AnalyzeCommandTests
         SetupSolutionDiscovery("/fake/cwd", []);
 
         var result = Invoke("--coverage", "coverage.xml");
+
+        result.Should().Be(1);
+    }
+
+    [Fact]
+    public void BaselineFileNotJson_ReturnsError()
+    {
+        _fileSystem.FileExists("test.sln").Returns(true);
+        _fileSystem.FileExists("coverage.xml").Returns(true);
+        _fileSystem.FileExists("report.csv").Returns(true);
+        _processRunner.Run("git", "--version", ".").Returns("git version 2.42.0");
+
+        var result = Invoke("--solution", "test.sln", "--coverage", "coverage.xml",
+            "--baseline", "report.csv");
 
         result.Should().Be(1);
     }

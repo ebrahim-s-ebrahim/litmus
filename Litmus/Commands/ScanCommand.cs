@@ -173,10 +173,20 @@ public class ScanCommand
         }
 
         // Validate baseline file if provided
-        if (options.BaselinePath != null && !fileSystem.FileExists(options.BaselinePath))
+        if (options.BaselinePath != null)
         {
-            AnsiConsole.MarkupLine("[red]Error:[/] Baseline file not found: " + options.BaselinePath);
-            return 1;
+            if (!fileSystem.FileExists(options.BaselinePath))
+            {
+                AnsiConsole.MarkupLine("[red]Error:[/] Baseline file not found: " + options.BaselinePath);
+                return 1;
+            }
+            if (!options.BaselinePath.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+            {
+                AnsiConsole.MarkupLine(
+                    "[red]Error:[/] --baseline requires a JSON file (from a previous --output report.json run).\n" +
+                    $"The file '{Markup.Escape(Path.GetFileName(options.BaselinePath))}' has an unsupported extension.");
+                return 1;
+            }
         }
 
         // Check dotnet availability
@@ -346,7 +356,7 @@ public class ScanCommand
 
             // Step 2: Run the full analysis pipeline
             if (!options.Quiet)
-                AnsiConsole.MarkupLine("[bold]Step 2/2:[/] Analyzing solution...");
+                AnsiConsole.MarkupLine($"[bold]Step 2/2:[/] Analyzing solution (churn since {options.Since:yyyy-MM-dd})...");
             return await AnalyzeCommand.RunAnalysis(options, coverageResult, fileSystem, processRunner);
         }
         finally

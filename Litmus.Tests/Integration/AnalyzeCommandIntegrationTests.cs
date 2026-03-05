@@ -8,6 +8,7 @@ using Spectre.Console;
 
 namespace Litmus.Tests.Integration;
 
+[Collection("AnsiConsole")]
 public class AnalyzeCommandIntegrationTests : IDisposable
 {
     private readonly IntegrationTestFixture _fixture;
