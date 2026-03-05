@@ -121,7 +121,8 @@ public class ReportRenderer
         var highRiskNeedSeams = reports.Count(r => r.RiskLevel == "High" && r.PriorityLevel != "High");
 
         var sinceStr = sinceDate.HasValue ? $" since {sinceDate.Value:yyyy-MM-dd}" : "";
-        var summary = $"{reports.Count} files analyzed{sinceStr}. {highPriorityCount} high-priority (start today), {mediumPriorityCount} medium-priority (next sprint).";
+        var topStr = top < reports.Count ? $" (showing top {top})" : "";
+        var summary = $"{reports.Count} files analyzed{sinceStr}{topStr}. {highPriorityCount} high-priority (start today), {mediumPriorityCount} medium-priority (next sprint).";
         if (highRiskNeedSeams > 0)
             summary += $" {highRiskNeedSeams} high-risk file(s) need seam introduction before testing.";
         if (skippedFiles > 0)

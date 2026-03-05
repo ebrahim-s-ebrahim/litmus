@@ -308,6 +308,46 @@ public class ReportRendererTests
     }
 
     [Fact]
+    public void Render_TopLessThanTotal_ShowsTopCountInSummary()
+    {
+        var reports = new List<FileRiskReport>
+        {
+            MakeReport("A.cs", 0.9),
+            MakeReport("B.cs", 0.7),
+            MakeReport("C.cs", 0.5),
+            MakeReport("D.cs", 0.3),
+            MakeReport("E.cs", 0.1)
+        };
+
+        var output = CaptureAnsiConsole(() =>
+        {
+            var renderer = new ReportRenderer(Substitute.For<IFileSystem>());
+            renderer.Render(reports, top: 3, noColor: true, outputPath: null, skippedFiles: 0);
+        });
+
+        output.Should().Contain("5 files analyzed (showing top 3).");
+    }
+
+    [Fact]
+    public void Render_TopEqualsTotal_OmitsTopCountInSummary()
+    {
+        var reports = new List<FileRiskReport>
+        {
+            MakeReport("A.cs", 0.9),
+            MakeReport("B.cs", 0.7)
+        };
+
+        var output = CaptureAnsiConsole(() =>
+        {
+            var renderer = new ReportRenderer(Substitute.For<IFileSystem>());
+            renderer.Render(reports, top: 5, noColor: true, outputPath: null, skippedFiles: 0);
+        });
+
+        output.Should().Contain("2 files analyzed.");
+        output.Should().NotContain("showing top");
+    }
+
+    [Fact]
     public void Render_WithoutSinceDate_OmitsDateInSummary()
     {
         var reports = new List<FileRiskReport> { MakeReport("A.cs", 0.8) };

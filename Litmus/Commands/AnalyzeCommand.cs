@@ -42,7 +42,7 @@ public class AnalyzeCommand
 
         var outputOption = new Option<string?>("--output")
         {
-            Description = "Export results to a JSON or CSV file"
+            Description = "Export results to a file (format determined by extension: .json or .csv)"
         };
 
         var baselineOption = new Option<string?>("--baseline")
@@ -57,7 +57,7 @@ public class AnalyzeCommand
 
         var formatOption = new Option<string>("--format")
         {
-            Description = "Output format for stdout: table, json, or csv",
+            Description = "Output format for stdout: table, json, or csv (independent of --output file format)",
             DefaultValueFactory = _ => "table"
         };
         formatOption.AcceptOnlyFromAmong("table", "json", "csv");

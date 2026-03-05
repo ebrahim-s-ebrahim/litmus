@@ -40,7 +40,7 @@ public class ScanCommand
 
         var outputOption = new Option<string?>("--output")
         {
-            Description = "Export results to a JSON or CSV file"
+            Description = "Export results to a file (format determined by extension: .json or .csv)"
         };
 
         var baselineOption = new Option<string?>("--baseline")
@@ -55,7 +55,7 @@ public class ScanCommand
 
         var formatOption = new Option<string>("--format")
         {
-            Description = "Output format for stdout: table, json, or csv",
+            Description = "Output format for stdout: table, json, or csv (independent of --output file format)",
             DefaultValueFactory = _ => "table"
         };
         formatOption.AcceptOnlyFromAmong("table", "json", "csv");
@@ -289,12 +289,48 @@ public class ScanCommand
                 }
                 catch (TimeoutException)
                 {
-                    AnsiConsole.MarkupLine(
-                        $"[red]Error:[/] dotnet test did not complete within {timeoutMinutes} minute(s) and was terminated.\n" +
-                        "This is typically caused by the coverage data collector (coverlet) hanging.\n" +
-                        "Try using --coverage-tool dotnet-coverage as an alternative.\n" +
-                        "Use --timeout <minutes> to increase the limit.");
-                    return 1;
+                    // Auto-fallback: try dotnet-coverage if available
+                    bool hasDotnetCoverage;
+                    try
+                    {
+                        processRunner.Run("dotnet-coverage", "--version", ".");
+                        hasDotnetCoverage = true;
+                    }
+                    catch
+                    {
+                        hasDotnetCoverage = false;
+                    }
+
+                    if (hasDotnetCoverage)
+                    {
+                        AnsiConsole.MarkupLine(
+                            $"[yellow]Warning:[/] Coverlet timed out after {timeoutMinutes} minute(s). Retrying with dotnet-coverage...");
+
+                        var coverageOutputPath = Path.Combine(tempDir, "coverage.cobertura.xml");
+                        var dcArgs = $"collect \"dotnet test \\\"{testTarget}\\\"\" -f cobertura -o \"{coverageOutputPath}\"";
+
+                        try
+                        {
+                            exitCode = RunTestWithLiveOutput(processRunner, "dotnet-coverage", dcArgs,
+                                solutionDir, options, testTimeoutMs);
+                        }
+                        catch (TimeoutException)
+                        {
+                            AnsiConsole.MarkupLine(
+                                $"[red]Error:[/] dotnet-coverage also timed out after {timeoutMinutes} minute(s).\n" +
+                                "Use --timeout <minutes> to increase the limit.");
+                            return 1;
+                        }
+                    }
+                    else
+                    {
+                        AnsiConsole.MarkupLine(
+                            $"[red]Error:[/] dotnet test did not complete within {timeoutMinutes} minute(s) and was terminated.\n" +
+                            "This is typically caused by the coverage data collector (coverlet) hanging.\n" +
+                            "Try using --coverage-tool dotnet-coverage as an alternative.\n" +
+                            "Use --timeout <minutes> to increase the limit.");
+                        return 1;
+                    }
                 }
             }
 
