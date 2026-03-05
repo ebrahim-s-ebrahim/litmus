@@ -13,4 +13,6 @@ public class FileSystemWrapper : IFileSystem
     public bool FileExists(string path) => File.Exists(path);
 
     public bool DirectoryExists(string path) => Directory.Exists(path);
+
+    public string GetCurrentDirectory() => Directory.GetCurrentDirectory();
 }

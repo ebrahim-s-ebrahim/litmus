@@ -4,383 +4,420 @@
 [![NuGet Downloads](https://img.shields.io/nuget/dt/dotnet-litmus.svg?include_prereleases)](https://www.nuget.org/packages/dotnet-litmus)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/ebrahim-s-ebrahim/litmus/blob/main/LICENSE)
 
-A .NET global CLI tool that answers two complementary questions when adding tests to a legacy codebase:
+A .NET global CLI tool that identifies where to start testing in a legacy codebase. It answers two questions:
 
 1. **Where is it dangerous to leave code untested?** — ranked by *Risk Score*
 2. **Where can you actually start testing today?** — ranked by *Starting Priority*
 
-It cross-references four signals to produce both scores:
+It cross-references four signals:
 
-- **Git churn** — how frequently a file changes
-- **Code coverage** — how well a file is tested
-- **Cyclomatic complexity** — how complex the file's logic is
-- **Dependency entanglement** — how many unseamed dependencies the file has (seam analysis)
+| Signal | What it measures |
+|---|---|
+| **Git churn** | How frequently a file changes |
+| **Code coverage** | How well a file is tested |
+| **Cyclomatic complexity** | How complex the file's logic is |
+| **Dependency entanglement** | How many unseamed dependencies block testability |
 
-The result is a ranked table sorted by *Starting Priority*: files that are both dangerous **and** practically testable today appear at the top. Files that are dangerous but heavily entangled appear lower, with a clear signal to introduce seams before attempting to test them.
+The result is a ranked table sorted by Starting Priority. Files that are dangerous **and** practically testable appear at the top. Files that are dangerous but heavily entangled appear lower, with a clear signal to introduce seams first.
 
 ## Quick Start
 
-### Prerequisites
+```bash
+# Install
+dotnet tool install --global dotnet-litmus
+
+# Run from the directory containing your .sln file
+dotnet-litmus scan
+```
+
+That's it. The tool auto-detects the solution file, runs tests, collects coverage, and produces a prioritized report.
+
+## Prerequisites
 
 - [.NET 8 SDK](https://dotnet.microsoft.com/download) or later
 - **git** installed and available on PATH
-- A **Cobertura XML** coverage report (produced by `coverlet`, `dotnet-coverage`, ReportGenerator, etc.)
+- For `scan`: test projects must reference [`coverlet.collector`](https://www.nuget.org/packages/coverlet.collector) (or use `--coverage-tool dotnet-coverage`)
+- For `analyze`: a pre-generated Cobertura XML coverage report
 
-### Install
+## Installation
 
 ```bash
-# Pack the tool
-dotnet pack Litmus/Litmus.csproj -c Release
-
-# Install as a global tool from the local package
-dotnet tool install --global --add-source Litmus/bin/Release dotnet-litmus
-
-# Or install from nuget.org (after publishing)
+# From NuGet (recommended)
 dotnet tool install --global dotnet-litmus
 
-# Or run directly without installing
-dotnet run --project Litmus -- analyze --solution path/to/YourApp.sln --coverage coverage.xml
+# Or from a local build
+dotnet pack Litmus/Litmus.csproj -c Release
+dotnet tool install --global --add-source Litmus/bin/Release dotnet-litmus
+
+# Or run without installing
+dotnet run --project Litmus -- scan
 ```
 
-### Two ways to run
+## Commands
 
-**Option A — One step with `scan` (recommended for getting started):**
+### `scan` — run tests and analyze in one step
 
 ```bash
+# Auto-detect solution file from current directory
+dotnet-litmus scan
+
+# Specify solution explicitly
 dotnet-litmus scan --solution MyApp.sln
+
+# Target a specific test directory
+dotnet-litmus scan --solution MyApp.sln --tests-dir tests/MyApp.Tests
+
+# Export results
+dotnet-litmus scan --output report.json
 ```
 
-This runs `dotnet test`, collects coverage automatically, then runs the full analysis. No need to generate a coverage file first.
+`scan` auto-detects the solution file when a single `.sln` or `.slnx` exists in the current directory. It then:
 
-**Option B — Two steps with `analyze` (when you already have coverage):**
-
-```bash
-# Generate coverage separately (e.g. in CI)
-dotnet test --collect:"XPlat Code Coverage"
-
-# Then analyze
-dotnet-litmus analyze --solution MyApp.sln --coverage TestResults/.../coverage.cobertura.xml
-```
-
-### What `scan` does
-
-1. Runs `dotnet test` with the XPlat Code Coverage collector (or `dotnet-coverage` if `--coverage-tool dotnet-coverage` is specified)
-2. Streams live output so you can see build progress and test results in real time
-3. Discovers all `coverage.cobertura.xml` files produced (one per test project)
-4. Merges them (taking the highest coverage rate per source file)
-5. Runs the full analysis pipeline (git churn → complexity → seam detection → scoring)
-6. Cleans up the temporary test results directory
-
-## CLI Options
-
-### `scan` — runs tests and analyzes in one step
-
-| Option | Required | Default | Description |
-|---|---|---|---|
-| `--solution` | Yes | -- | Path to a `.sln` or `.slnx` file |
-| `--tests-dir` | No | solution file | Directory or project to run `dotnet test` against |
-| `--coverage-tool` | No | coverlet | Coverage collector: `coverlet` or `dotnet-coverage` |
-| `--timeout` | No | 10 | Maximum minutes to wait for test execution |
-| `--since` | No | 1 year ago | Limit git history to commits after this date (ISO format) |
-| `--top` | No | 20 | Number of top files to display |
-| `--exclude` | No | -- | Glob pattern(s) to exclude files (repeatable) |
-| `--output` | No | -- | Export full results to a `.json` or `.csv` file |
-| `--baseline` | No | -- | Path to a previous JSON export to compare against |
-| `--format` | No | table | Output format for stdout: `table`, `json`, or `csv` |
-| `--verbose` | No | false | Show detailed intermediate scores and live test output |
-| `--quiet` | No | false | Suppress all output except errors (exit code only) |
-| `--no-color` | No | false | Disable colored output |
+1. Runs `dotnet test` with the XPlat Code Coverage collector
+2. Streams live output so you see build progress and test results in real time
+3. Discovers and merges all `coverage.cobertura.xml` files (one per test project)
+4. Runs the full analysis pipeline (git churn, complexity, seam detection, scoring)
+5. Cleans up temporary test results
 
 ### `analyze` — use an existing coverage file
 
-| Option | Required | Default | Description |
-|---|---|---|---|
-| `--solution` | Yes | -- | Path to a `.sln` or `.slnx` file |
-| `--coverage` | Yes | -- | Path to a Cobertura XML coverage file |
-| `--since` | No | 1 year ago | Limit git history to commits after this date (ISO format) |
-| `--top` | No | 20 | Number of top files to display |
-| `--exclude` | No | -- | Glob pattern(s) to exclude files (repeatable) |
-| `--output` | No | -- | Export full results to a `.json` or `.csv` file |
-| `--baseline` | No | -- | Path to a previous JSON export to compare against |
-| `--format` | No | table | Output format for stdout: `table`, `json`, or `csv` |
-| `--verbose` | No | false | Show detailed intermediate scores for each file |
-| `--quiet` | No | false | Suppress all output except errors (exit code only) |
-| `--no-color` | No | false | Disable colored output |
-
-## Examples
-
-### Quickest start — run tests and analyze in one command
-
 ```bash
-dotnet-litmus scan --solution MyApp.sln
+# Auto-detect solution, provide coverage file
+dotnet-litmus analyze --coverage TestResults/.../coverage.cobertura.xml
+
+# Specify solution explicitly
+dotnet-litmus analyze --solution MyApp.sln --coverage coverage.xml
 ```
 
-### Scan with a specific test directory, export to JSON
+Use `analyze` when you already have a Cobertura XML coverage report (e.g., from CI).
 
-```bash
-dotnet-litmus scan \
-  --solution MyApp.sln \
-  --tests-dir tests/MyApp.Tests \
-  --output report.json
-```
+## CLI Reference
 
-### Scan the last 6 months, show top 10
+### `scan` options
 
-```bash
-dotnet-litmus scan \
-  --solution src/MyApp.sln \
-  --since 2025-08-01 \
-  --top 10
-```
+| Option | Default | Description |
+|---|---|---|
+| `--solution` | auto-detect | Path to `.sln` or `.slnx`. Auto-detected when one exists in cwd. |
+| `--tests-dir` | solution file | Directory or project to run `dotnet test` against |
+| `--coverage-tool` | coverlet | Coverage collector: `coverlet` or `dotnet-coverage` |
+| `--timeout` | 10 | Maximum minutes for test execution |
+| `--since` | 1 year ago | Git history cutoff (ISO date format, e.g. `2025-01-01`) |
+| `--top` | 20 | Number of files to display |
+| `--exclude` | -- | Glob pattern(s) to exclude (repeatable) |
+| `--output` | -- | Export to `.json` or `.csv` file |
+| `--baseline` | -- | Previous JSON export for delta comparison |
+| `--format` | table | Stdout format: `table`, `json`, or `csv` |
+| `--verbose` | false | Show detailed intermediate scores and live test output |
+| `--quiet` | false | Suppress all output except errors |
+| `--no-color` | false | Disable colored output |
 
-### Use dotnet-coverage instead of coverlet
+### `analyze` options
 
-If `scan` hangs or times out due to coverlet issues, use Microsoft's `dotnet-coverage` tool instead:
-
-```bash
-# Install dotnet-coverage first (one-time)
-dotnet tool install --global dotnet-coverage
-
-# Then run scan with --coverage-tool
-dotnet-litmus scan \
-  --solution MyApp.sln \
-  --coverage-tool dotnet-coverage
-```
-
-### Increase timeout for large solutions
-
-```bash
-dotnet-litmus scan \
-  --solution MyApp.sln \
-  --timeout 30
-```
-
-### Analyze with an existing coverage file, exclude generated code
-
-```bash
-dotnet-litmus analyze \
-  --solution MyApp.sln \
-  --coverage coverage.xml \
-  --exclude "*.Generated.cs" \
-  --exclude "**/ViewModels/*.cs" \
-  --output report.json
-```
-
-### Compare against a baseline (CI diff mode)
-
-```bash
-# First run: save a baseline
-dotnet-litmus analyze \
-  --solution MyApp.sln \
-  --coverage coverage.xml \
-  --output baseline.json
-
-# Later: compare current state against the baseline
-dotnet-litmus analyze \
-  --solution MyApp.sln \
-  --coverage coverage.xml \
-  --baseline baseline.json
-```
-
-When `--baseline` is provided, a **Delta** column appears in the table showing how each file's Starting Priority changed (`+0.15` = degraded, `-0.10` = improved, `NEW` = not in baseline). A summary line reports: `vs baseline: N improved, N degraded, N new, N removed.`
-
-### Pipe JSON to jq or other tools
-
-```bash
-# Get the top 5 files as JSON and filter with jq
-dotnet-litmus analyze \
-  --solution MyApp.sln \
-  --coverage coverage.xml \
-  --format json | jq '.[].file'
-
-# Export CSV to stdout for further processing
-dotnet-litmus analyze \
-  --solution MyApp.sln \
-  --coverage coverage.xml \
-  --format csv > results.csv
-```
-
-### Pipe-friendly plain output
-
-```bash
-dotnet-litmus analyze \
-  --solution MyApp.sln \
-  --coverage coverage.xml \
-  --no-color \
-  --output results.csv
-```
+| Option | Default | Description |
+|---|---|---|
+| `--solution` | auto-detect | Path to `.sln` or `.slnx`. Auto-detected when one exists in cwd. |
+| `--coverage` | *required* | Path to Cobertura XML coverage file |
+| `--since` | 1 year ago | Git history cutoff (ISO date format) |
+| `--top` | 20 | Number of files to display |
+| `--exclude` | -- | Glob pattern(s) to exclude (repeatable) |
+| `--output` | -- | Export to `.json` or `.csv` file |
+| `--baseline` | -- | Previous JSON export for delta comparison |
+| `--format` | table | Stdout format: `table`, `json`, or `csv` |
+| `--verbose` | false | Show detailed intermediate scores |
+| `--quiet` | false | Suppress all output except errors |
+| `--no-color` | false | Disable colored output |
 
 ## Understanding the Output
 
-The tool produces a table like this:
-
 ```
-╭──────┬────────────────────────────────┬─────────┬──────────┬────────────┬────────────┬──────┬──────────┬────────╮
-│ Rank │ File                           │ Commits │ Coverage │ Complexity │ Dependency │ Risk │ Priority │ Level  │
-├──────┼────────────────────────────────┼─────────┼──────────┼────────────┼────────────┼──────┼──────────┼────────┤
-│ 1    │ Services/OrderService.cs       │ 47      │ 12%      │ 94         │ Low        │ 1.42 │ 1.42     │ High   │
-│ 2    │ Services/ReportFormatter.cs    │ 22      │ 31%      │ 67         │ Low        │ 0.71 │ 0.71     │ High   │
-│ 3    │ Controllers/PaymentGateway.cs  │ 31      │ 8%       │ 118        │ Very High  │ 1.61 │ 0.32     │ Medium │
-│ 4    │ Data/LegacyDbSync.cs           │ 41      │ 0%       │ 201        │ Very High  │ 1.89 │ 0.19     │ Low    │
-╰──────┴────────────────────────────────┴─────────┴──────────┴────────────┴────────────┴──────┴──────────┴────────╯
+Rank  File                           Commits  Coverage  Complexity  Dependency  Risk  Priority  Level
+1     Services/OrderService.cs       47       12%       94          Low         1.42  1.42      High
+2     Services/ReportFormatter.cs    22       31%       67          Low         0.71  0.71      High
+3     Controllers/PaymentGateway.cs  31       8%        118         Very High   1.61  0.32      Medium
+4     Data/LegacyDbSync.cs           41       0%        201         Very High   1.89  0.19      Low
+
 4 files analyzed. 2 high-priority (start today), 1 medium-priority (next sprint). 2 high-risk file(s) need seam introduction before testing.
 ```
 
-**Reading the table:**
+### Reading the table
 
-- **Dependency** — cost of adding seams: `Low` | `Medium` | `High` | `Very High`
-- **Risk** — how dangerous it is to leave untested (Phase 1 score, range 0–2.0)
-- **Priority** — where to start today (Phase 2 score, range 0–2.0)
-- **Level** — actionable tier based on Starting Priority
+| Column | Meaning |
+|---|---|
+| **Commits** | Number of git commits touching this file in the analysis window |
+| **Coverage** | Line coverage from the Cobertura report |
+| **Complexity** | Cyclomatic complexity (sum across all methods) |
+| **Dependency** | Cost of adding test seams: `Low`, `Medium`, `High`, `Very High` |
+| **Risk** | How dangerous it is to leave untested (0-2.0) |
+| **Priority** | Where to start testing today (0-2.0) |
+| **Level** | Actionable tier based on Starting Priority |
 
-`PaymentGateway.cs` has a *higher* Risk score than `OrderService.cs`, but its `Very High` dependency level pushes its Starting Priority down to Medium. The tool is telling you: *"This file is dangerous, but introduce seams before attempting to test it."*
+`PaymentGateway.cs` has a *higher* Risk (1.61) than `OrderService.cs` (1.42), but its `Very High` dependency level pushes its Starting Priority down to 0.32 (Medium). The tool is telling you: *"This file is dangerous, but introduce seams before attempting to test it."*
 
-`LegacyDbSync.cs` is the most dangerous file in the codebase — but its Starting Priority is Low because it is too entangled to test directly today.
+### Row colors
 
-**Color coding:**
-
-| Row Color | Meaning |
+| Color | Meaning |
 |---|---|
 | Red | High priority — risky and testable now |
 | Yellow | Medium priority — plan for next sprint |
 | Default | Low priority — backlog or too entangled |
 
-The **Risk** column is independently highlighted in red/yellow when a file is high/medium risk regardless of its starting priority. This makes it easy to spot the "introduce seams first" files.
+The **Risk** column is independently colored to highlight dangerous-but-entangled files.
 
-## Priority and Risk Levels
+### Priority and risk levels
 
-**Starting Priority (primary output — sort order)**
-
-| Level | Score Range | Meaning |
-|---|---|---|
-| **High** | ≥ 0.6 | Start here — risky and practically testable now |
-| **Medium** | ≥ 0.2 | Plan for the next sprint |
-| **Low** | < 0.2 | Backlog — too costly relative to risk, or low risk overall |
-
-**Risk Level (secondary output)**
-
-| Level | Score Range | Meaning |
-|---|---|---|
-| **High** | ≥ 0.6 | Changes often, poorly tested, complex logic |
-| **Medium** | ≥ 0.2 | Moderate risk — worth investigating |
-| **Low** | < 0.2 | Low churn, well-tested, or simple code |
+| Level | Score Range | Priority meaning | Risk meaning |
+|---|---|---|---|
+| **High** | >= 0.6 | Start here — testable now | Changes often, poorly tested, complex |
+| **Medium** | >= 0.2 | Plan for next sprint | Moderate risk |
+| **Low** | < 0.2 | Backlog or too entangled | Low churn, well-tested, or simple |
 
 ## How Scores Are Calculated
 
 ### Phase 1 — Risk Score
 
 ```
-RiskScore = ChurnNorm × (1 - CoverageRate) × (1 + ComplexityNorm)
+RiskScore = ChurnNorm x (1 - CoverageRate) x (1 + ComplexityNorm)
 ```
 
-Each factor is normalized to [0, 1]:
+Each factor is normalized to [0, 1]. Range: 0 to 2.0. A file that changes constantly, has no tests, and is highly complex scores near 2.0.
 
-- **ChurnNorm**: weighted lines changed relative to the most-changed file
-- **CoverageRate**: line coverage from the Cobertura report (0.0 to 1.0)
-- **ComplexityNorm**: cyclomatic complexity relative to the most complex file
+### Phase 2 — Starting Priority
 
-Range: 0 to 2.0. A file that changes constantly, has no tests, and is highly complex scores near 2.0.
-
-### Phase 2 — Dependency Score and Starting Priority
-
-The dependency score measures how many **unseamed dependencies** a file has — things a test cannot substitute, control, or observe. Six signals are detected using Roslyn syntax analysis:
+The dependency score measures **unseamed dependencies** — things a test cannot substitute. Six signals are detected via Roslyn:
 
 | Signal | Weight | What it detects |
 |---|---|---|
-| **Unseamed infrastructure calls** | 2.0 | `DateTime.Now`, `File.*`, `Environment.*`, `Guid.NewGuid()`, `new HttpClient()`, `new SomeDbContext()` |
-| **Direct instantiation in methods** | 1.5 | `new ConcreteType()` inside a method body (excluding DTOs, exceptions, collections) |
-| **Concrete constructor parameters** | 0.5 | Constructor parameters that do not follow the `ITypeName` interface convention |
-| **Static calls on non-utility types** | 1.0 | `MyHelper.Transform()`, `CacheManager.Invalidate()` (excluding `Math`, `Convert`, `Enumerable`, etc.) |
-| **Async seam calls** | 1.5 | `await _httpClient.GetAsync()`, `await _db.SaveChangesAsync()`, and other known async I/O methods |
-| **Concrete downcasts** | 1.0 | `(ConcreteType)expr` and `expr as ConcreteType` — defeats interface abstractions |
+| Unseamed infrastructure calls | 2.0 | `DateTime.Now`, `File.*`, `new HttpClient()`, `new DbContext()` |
+| Direct instantiation in methods | 1.5 | `new ConcreteType()` (excluding DTOs, exceptions, collections) |
+| Concrete constructor parameters | 0.5 | Constructor params without interface convention |
+| Static calls on non-utility types | 1.0 | `MyHelper.Transform()` (excluding `Math`, `Convert`, etc.) |
+| Async seam calls | 1.5 | `await _httpClient.GetAsync()`, `await _db.SaveChangesAsync()` |
+| Concrete downcasts | 1.0 | `(ConcreteType)expr` and `expr as ConcreteType` |
 
-**DI registration files** (`Program.cs`, `Startup.cs`, files calling `AddScoped`/`AddSingleton`/`AddTransient`) are automatically detected and given a zeroed dependency score, since their high coupling is expected.
+DI registration files (`Program.cs`, `Startup.cs`, files with `AddScoped`/`AddSingleton`/`AddTransient`) get a zeroed dependency score.
 
 ```
-RawDependencyScore = (InfrastructureCalls × 2.0) + (DirectInstantiations × 1.5)
-                   + (ConcreteConstructorParams × 0.5) + (StaticCalls × 1.0)
-                   + (AsyncSeamCalls × 1.5) + (ConcreteCasts × 1.0)
-
-DependencyNorm = RawDependencyScore / Max(RawDependencyScore across all files)
-
-StartingPriority = RiskScore × (1 - DependencyNorm)
+StartingPriority = RiskScore x (1 - DependencyNorm)
 ```
 
-`DependencyNorm = 0` (fully seamed) → `StartingPriority = RiskScore`.
-`DependencyNorm = 1` (maximally entangled) → `StartingPriority = 0`.
+Fully seamed (`DependencyNorm = 0`) -> Priority equals Risk.
+Maximally entangled (`DependencyNorm = 1`) -> Priority drops to 0.
 
-The two scores are kept separate intentionally: a file can be High Risk but Low Starting Priority. That combination is one of the most valuable signals in the output — it means *"this file is dangerous but needs seam introduction before you can test it."*
+## Examples
+
+### Scan the last 6 months, show top 10
+
+```bash
+dotnet-litmus scan --since 2025-08-01 --top 10
+```
+
+### Use dotnet-coverage instead of coverlet
+
+```bash
+dotnet tool install --global dotnet-coverage
+dotnet-litmus scan --coverage-tool dotnet-coverage
+```
+
+### Exclude generated code
+
+```bash
+dotnet-litmus analyze \
+  --coverage coverage.xml \
+  --exclude "*.Generated.cs" \
+  --exclude "**/ViewModels/*.cs" \
+  --output report.json
+```
+
+### Compare against a baseline
+
+```bash
+# Save a baseline
+dotnet-litmus scan --output baseline.json
+
+# Later: compare
+dotnet-litmus scan --baseline baseline.json
+```
+
+When `--baseline` is provided, a **Delta** column appears showing how each file's Starting Priority changed (`+0.15` = degraded, `-0.10` = improved, `NEW` = not in baseline). A summary reports: `vs baseline: N improved, N degraded, N new, N removed.`
+
+### Machine-readable output
+
+```bash
+# JSON to stdout
+dotnet-litmus analyze --coverage coverage.xml --format json | jq '.[].file'
+
+# CSV to stdout
+dotnet-litmus analyze --coverage coverage.xml --format csv > results.csv
+
+# Quiet mode: only exit code + file export
+dotnet-litmus scan --quiet --output report.json
+```
+
+## CI/CD Integration
+
+Litmus works well in CI pipelines for tracking test debt over time.
+
+### GitHub Actions example
+
+```yaml
+name: Litmus Analysis
+on: [push]
+
+jobs:
+  litmus:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history needed for git churn
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Install Litmus
+        run: dotnet tool install --global dotnet-litmus
+
+      - name: Run analysis
+        run: dotnet-litmus scan --output report.json --format json --quiet
+
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        with:
+          name: litmus-report
+          path: report.json
+```
+
+### Baseline comparison in CI
+
+```yaml
+      - name: Download previous baseline
+        uses: actions/download-artifact@v4
+        with:
+          name: litmus-baseline
+        continue-on-error: true  # First run won't have a baseline
+
+      - name: Run analysis with baseline
+        run: |
+          if [ -f baseline.json ]; then
+            dotnet-litmus scan --output report.json --baseline baseline.json
+          else
+            dotnet-litmus scan --output report.json
+          fi
+
+      - name: Save as next baseline
+        uses: actions/upload-artifact@v4
+        with:
+          name: litmus-baseline
+          path: report.json
+```
+
+### Key flags for CI
+
+| Flag | Purpose |
+|---|---|
+| `--quiet` | No console output, only exit code and file export |
+| `--output report.json` | Machine-readable export |
+| `--format json` | JSON to stdout for piping |
+| `--no-color` | Disable ANSI codes in log output |
+| `--baseline previous.json` | Track regressions over time |
+
+## Exit Codes
+
+| Code | Meaning |
+|---|---|
+| `0` | Success. Analysis completed (or no files found after filters — warning printed). |
+| `1` | Error. Validation failure, missing dependencies, test failure with no coverage, or runtime error. |
 
 ## Default Exclusions
 
 The following patterns are always excluded to reduce noise from auto-generated files:
 
-- `*.Designer.cs`
-- `*.g.cs` / `*.g.i.cs`
-- `*Migrations/*.cs`
-- `*AssemblyInfo.cs`
+- `*.Designer.cs`, `*.g.cs`, `*.g.i.cs`, `*.generated.cs`
+- `*AssemblyInfo.cs`, `*GlobalUsings.g.cs`
 - `*.xaml.cs`
+- `**/Migrations/*.cs`, `*ModelSnapshot.cs`
+- `Program.cs`, `Startup.cs`
+- `**/obj/**`, `**/bin/**`, `**/wwwroot/**`
 
-Use `--exclude` to add additional patterns on top of these defaults.
+Use `--exclude` to add additional patterns on top of these.
 
-## Coverage Prerequisites (for `analyze`)
+## Troubleshooting
 
-The `scan` command handles coverage automatically. If you use `analyze` and need to generate a coverage file manually:
+### No solution file found
+
+If no `--solution` is provided and no single `.sln`/`.slnx` exists in the current directory:
+
+```bash
+# Move to the solution directory
+cd /path/to/your/project
+dotnet-litmus scan
+
+# Or specify the path
+dotnet-litmus scan --solution path/to/MyApp.sln
+```
+
+If multiple solution files exist, you must specify which one.
+
+### Tests fail and no coverage
+
+If you see *"No coverage files were generated because some tests failed"*, fix the failing tests first. Coverage cannot be collected from failed test runs.
+
+If tests pass but no coverage is generated, your test projects are missing `coverlet.collector`:
+
+```bash
+dotnet add <test-project> package coverlet.collector
+```
+
+Or use `dotnet-coverage` which doesn't require a package reference:
+
+```bash
+dotnet tool install --global dotnet-coverage
+dotnet-litmus scan --coverage-tool dotnet-coverage
+```
+
+### `scan` hangs during test execution
+
+Usually caused by coverlet hanging after tests complete. Solutions in order of preference:
+
+1. **Use `dotnet-coverage`**: Avoids the coverlet data collector entirely.
+   ```bash
+   dotnet tool install --global dotnet-coverage
+   dotnet-litmus scan --coverage-tool dotnet-coverage
+   ```
+
+2. **Upgrade coverlet**: Update `coverlet.collector` to the latest version.
+
+3. **Increase timeout**: For large solutions that just need more time.
+   ```bash
+   dotnet-litmus scan --timeout 30
+   ```
+
+4. **Use `analyze` directly**: Generate coverage separately.
+   ```bash
+   dotnet-coverage collect "dotnet test MyApp.sln" -f cobertura -o coverage.xml
+   dotnet-litmus analyze --coverage coverage.xml
+   ```
+
+### Coverage prerequisites for `analyze`
 
 ```bash
 dotnet test --collect:"XPlat Code Coverage"
 ```
 
-This creates a `coverage.cobertura.xml` file inside `TestResults/`. For multiple test projects, use [ReportGenerator](https://github.com/danielpalme/ReportGenerator) to merge:
+For multiple test projects, merge with [ReportGenerator](https://github.com/danielpalme/ReportGenerator):
 
 ```bash
 dotnet tool install -g dotnet-reportgenerator-globaltool
 reportgenerator -reports:"**/coverage.cobertura.xml" -targetdir:"merged" -reporttypes:Cobertura
-dotnet-litmus analyze --solution MyApp.sln --coverage merged/Cobertura.xml
+dotnet-litmus analyze --coverage merged/Cobertura.xml
 ```
 
-The `scan` command does this merge automatically — it is generally the simpler option.
+The `scan` command does this merge automatically.
 
 ## Solution Format Support
 
-The tool supports both classic `.sln` files and the newer `.slnx` XML-based format. It automatically detects the format based on the file extension.
-
-## Troubleshooting
-
-### `scan` hangs during test execution
-
-The most common cause is coverlet's data collector process hanging after tests complete. This is a known issue with certain versions of `coverlet.collector` and .NET SDK combinations.
-
-**Solutions (in order of preference):**
-
-1. **Use `dotnet-coverage` instead:** This avoids the coverlet data collector entirely.
-   ```bash
-   dotnet tool install --global dotnet-coverage
-   dotnet-litmus scan --solution MyApp.sln --coverage-tool dotnet-coverage
-   ```
-
-2. **Upgrade coverlet:** Update `coverlet.collector` in your test projects to the latest version.
-   ```bash
-   dotnet add <test-project> package coverlet.collector
-   ```
-
-3. **Increase the timeout:** If coverage just takes a long time (large solution), increase the default 10-minute limit.
-   ```bash
-   dotnet-litmus scan --solution MyApp.sln --timeout 30
-   ```
-
-4. **Use `analyze` instead:** Generate coverage separately and pass the file directly.
-   ```bash
-   dotnet-coverage collect "dotnet test MyApp.sln" -f cobertura -o coverage.xml
-   dotnet-litmus analyze --solution MyApp.sln --coverage coverage.xml
-   ```
-
-## Requirements
-
-- .NET 8.0 or later
-- Git must be installed and the solution must reside inside a git repository
-- `scan`: requires dotnet SDK with `coverlet.collector` in test projects (or `dotnet-coverage` installed globally when using `--coverage-tool dotnet-coverage`)
-- `analyze`: requires a pre-generated Cobertura XML coverage report
+Both classic `.sln` files and the newer `.slnx` XML format are supported. The format is auto-detected from the file extension.
 
 ## License
 

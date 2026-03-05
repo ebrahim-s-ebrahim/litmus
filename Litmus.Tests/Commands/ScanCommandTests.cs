@@ -35,6 +35,14 @@ public class ScanCommandTests
         _processRunner.Run("git", "--version", ".").Returns("git version 2.42.0");
     }
 
+    private void SetupSolutionDiscovery(string cwd, IEnumerable<string> slnFiles,
+        IEnumerable<string>? slnxFiles = null)
+    {
+        _fileSystem.GetCurrentDirectory().Returns(cwd);
+        _fileSystem.GetFiles(cwd, "*.sln", false).Returns(slnFiles);
+        _fileSystem.GetFiles(cwd, "*.slnx", false).Returns(slnxFiles ?? Enumerable.Empty<string>());
+    }
+
     // ── Validation tests ────────────────────────────────────────────
 
     [Fact]
@@ -374,5 +382,121 @@ public class ScanCommandTests
         if (args[start] == '"') start++;
         var end = args.IndexOf('"', start);
         return args[start..end];
+    }
+
+    // ── Solution auto-discovery tests ────────────────────────────────
+
+    [Fact]
+    public void NoSolutionArg_SingleSlnInCwd_IsAutoDetected()
+    {
+        const string fakeCwd = "/fake/cwd";
+        const string fakeSln = "/fake/cwd/MyApp.sln";
+        SetupSolutionDiscovery(fakeCwd, [fakeSln]);
+        _fileSystem.FileExists(fakeSln).Returns(true);
+        SetupToolsAvailable();
+        _fileSystem.GetFiles(Arg.Any<string>(), "coverage.cobertura.xml", true)
+            .Returns(Enumerable.Empty<string>());
+
+        // Should get past validation and attempt to run dotnet test
+        Invoke();
+
+        _processRunner.Received().RunWithLiveOutput("dotnet",
+            Arg.Is<string>(a => a.StartsWith("test ")),
+            Arg.Any<string>(),
+            Arg.Any<Action<string>?>(), Arg.Any<int>());
+    }
+
+    [Fact]
+    public void NoSolutionArg_SingleSlnxInCwd_IsAutoDetected()
+    {
+        const string fakeCwd = "/fake/cwd";
+        const string fakeSlnx = "/fake/cwd/MyApp.slnx";
+        SetupSolutionDiscovery(fakeCwd, [], [fakeSlnx]);
+        _fileSystem.FileExists(fakeSlnx).Returns(true);
+        SetupToolsAvailable();
+        _fileSystem.GetFiles(Arg.Any<string>(), "coverage.cobertura.xml", true)
+            .Returns(Enumerable.Empty<string>());
+
+        Invoke();
+
+        _processRunner.Received().RunWithLiveOutput("dotnet",
+            Arg.Is<string>(a => a.StartsWith("test ")),
+            Arg.Any<string>(),
+            Arg.Any<Action<string>?>(), Arg.Any<int>());
+    }
+
+    [Fact]
+    public void NoSolutionArg_NoSlnInCwd_ReturnsError()
+    {
+        SetupSolutionDiscovery("/fake/cwd", []);
+
+        var result = Invoke();
+
+        result.Should().Be(1);
+    }
+
+    [Fact]
+    public void NoSolutionArg_MultipleSlnInCwd_ReturnsError()
+    {
+        SetupSolutionDiscovery("/fake/cwd",
+            ["/fake/cwd/AppA.sln", "/fake/cwd/AppB.sln"]);
+
+        var result = Invoke();
+
+        result.Should().Be(1);
+    }
+
+    // ── Error message tests (improvement #3) ────────────────────────
+
+    [Fact]
+    public void TestsFail_NoCoverageFiles_ErrorMentionsTestFailure()
+    {
+        var console = new StringWriter();
+        AnsiConsole.Console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Out = new AnsiConsoleOutput(console),
+            ColorSystem = ColorSystemSupport.NoColors
+        });
+
+        _fileSystem.FileExists("test.sln").Returns(true);
+        SetupToolsAvailable();
+        _processRunner.RunWithLiveOutput("dotnet",
+            Arg.Is<string>(s => s.StartsWith("test ")),
+            Arg.Any<string>(),
+            Arg.Any<Action<string>?>(), Arg.Any<int>())
+            .Returns(1);
+        _fileSystem.GetFiles(Arg.Any<string>(), "coverage.cobertura.xml", true)
+            .Returns(Enumerable.Empty<string>());
+
+        Invoke("--solution", "test.sln");
+
+        console.ToString().Should().Contain("tests failed");
+    }
+
+    [Fact]
+    public void TestsPass_NoCoverageFiles_ErrorMentionsCoverletPackage()
+    {
+        var console = new StringWriter();
+        AnsiConsole.Console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Out = new AnsiConsoleOutput(console),
+            ColorSystem = ColorSystemSupport.NoColors
+        });
+
+        _fileSystem.FileExists("test.sln").Returns(true);
+        SetupToolsAvailable();
+        _processRunner.RunWithLiveOutput("dotnet",
+            Arg.Is<string>(s => s.StartsWith("test ")),
+            Arg.Any<string>(),
+            Arg.Any<Action<string>?>(), Arg.Any<int>())
+            .Returns(0);
+        _fileSystem.GetFiles(Arg.Any<string>(), "coverage.cobertura.xml", true)
+            .Returns(Enumerable.Empty<string>());
+
+        Invoke("--solution", "test.sln");
+
+        var output = console.ToString();
+        output.Should().Contain("coverlet.collector");
+        output.Should().NotContain("tests failed");
     }
 }

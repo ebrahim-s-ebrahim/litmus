@@ -6,4 +6,5 @@ public interface IFileSystem
     IEnumerable<string> GetFiles(string directory, string pattern, bool recursive);
     bool FileExists(string path);
     bool DirectoryExists(string path);
+    string GetCurrentDirectory();
 }

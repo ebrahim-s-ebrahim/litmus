@@ -12,10 +12,9 @@ public class AnalyzeCommand
 {
     public static Command Create(IFileSystem fileSystem, IProcessRunner processRunner)
     {
-        var solutionOption = new Option<string>("--solution")
+        var solutionOption = new Option<string?>("--solution")
         {
-            Description = "Path to a .sln or .slnx file",
-            Required = true
+            Description = "Path to a .sln or .slnx file. Auto-detected if a single .sln/.slnx exists in the current directory."
         };
 
         var coverageOption = new Option<string>("--coverage")
@@ -90,9 +89,18 @@ public class AnalyzeCommand
 
         command.SetAction(parseResult =>
         {
+            var (solutionPath, solutionError) = CommandHelpers.ResolveSolutionPath(
+                parseResult.GetValue(solutionOption), fileSystem);
+
+            if (solutionError != null)
+            {
+                AnsiConsole.MarkupLine($"[red]Error:[/] {Markup.Escape(solutionError)}");
+                return Task.FromResult(1);
+            }
+
             var options = new AnalysisOptions
             {
-                SolutionPath = parseResult.GetValue(solutionOption)!,
+                SolutionPath = solutionPath!,
                 CoveragePath = parseResult.GetValue(coverageOption)!,
                 Since = parseResult.GetValue(sinceOption) ?? DateTime.Today.AddYears(-1),
                 Top = parseResult.GetValue(topOption),

@@ -10,10 +10,9 @@ public class ScanCommand
 {
     public static Command Create(IFileSystem fileSystem, IProcessRunner processRunner)
     {
-        var solutionOption = new Option<string>("--solution")
+        var solutionOption = new Option<string?>("--solution")
         {
-            Description = "Path to a .sln or .slnx file",
-            Required = true
+            Description = "Path to a .sln or .slnx file. Auto-detected if a single .sln/.slnx exists in the current directory."
         };
 
         var testsDirOption = new Option<string?>("--tests-dir")
@@ -105,9 +104,18 @@ public class ScanCommand
 
         command.SetAction(parseResult =>
         {
+            var (solutionPath, solutionError) = CommandHelpers.ResolveSolutionPath(
+                parseResult.GetValue(solutionOption), fileSystem);
+
+            if (solutionError != null)
+            {
+                AnsiConsole.MarkupLine($"[red]Error:[/] {Markup.Escape(solutionError)}");
+                return Task.FromResult(1);
+            }
+
             var options = new AnalysisOptions
             {
-                SolutionPath = parseResult.GetValue(solutionOption)!,
+                SolutionPath = solutionPath!,
                 CoveragePath = string.Empty,  // filled in at runtime after dotnet test
                 Since = parseResult.GetValue(sinceOption) ?? DateTime.Today.AddYears(-1),
                 Top = parseResult.GetValue(topOption),
@@ -299,12 +307,22 @@ public class ScanCommand
             if (coverageFiles.Count == 0)
             {
                 if (testErrorDetail != null)
-                    AnsiConsole.MarkupLine($"[dim]{Markup.Escape(testErrorDetail)}[/]");
-                AnsiConsole.MarkupLine(
-                    "[red]Error:[/] No coverage.cobertura.xml files were generated.\n" +
-                    "Make sure your test project(s) reference the coverlet.collector package:\n" +
-                    "  dotnet add <test-project> package coverlet.collector\n" +
-                    "Or try: --coverage-tool dotnet-coverage");
+                {
+                    AnsiConsole.MarkupLine(
+                        "[red]Error:[/] No coverage files were generated because some tests failed.\n" +
+                        "Fix the failing tests and re-run. If tests pass but coverage is still missing,\n" +
+                        "ensure your test projects reference the coverlet.collector package:\n" +
+                        "  dotnet add <test-project> package coverlet.collector\n" +
+                        "Or try: --coverage-tool dotnet-coverage");
+                }
+                else
+                {
+                    AnsiConsole.MarkupLine(
+                        "[red]Error:[/] No coverage.cobertura.xml files were generated.\n" +
+                        "Ensure your test projects reference the coverlet.collector package:\n" +
+                        "  dotnet add <test-project> package coverlet.collector\n" +
+                        "Or try: --coverage-tool dotnet-coverage");
+                }
                 return 1;
             }
 
