@@ -4,21 +4,14 @@
 [![NuGet Downloads](https://img.shields.io/nuget/dt/dotnet-litmus.svg?include_prereleases)](https://www.nuget.org/packages/dotnet-litmus)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/ebrahim-s-ebrahim/litmus/blob/main/LICENSE)
 
-A .NET global CLI tool that identifies where to start testing in a legacy codebase. It answers two questions:
+*Find where to start testing in a legacy codebase.*
+
+Litmus is a .NET global CLI tool that answers two questions:
 
 1. **Where is it dangerous to leave code untested?** — ranked by *Risk Score*
 2. **Where can you actually start testing today?** — ranked by *Starting Priority*
 
-It cross-references four signals:
-
-| Signal | What it measures |
-|---|---|
-| **Git churn** | How frequently a file changes |
-| **Code coverage** | How well a file is tested |
-| **Cyclomatic complexity** | How complex the file's logic is |
-| **Dependency entanglement** | How many unseamed dependencies block testability |
-
-The result is a ranked table sorted by Starting Priority. Files that are dangerous **and** practically testable appear at the top. Files that are dangerous but heavily entangled appear lower, with a clear signal to introduce seams first.
+The result is a ranked table. Files that are dangerous **and** practically testable appear at the top. Files that are dangerous but heavily entangled appear lower, with a clear signal to introduce [seams](https://www.oreilly.com/library/view/working-effectively-with/0131177052/) first.
 
 ## Quick Start
 
@@ -31,101 +24,6 @@ dotnet-litmus scan
 ```
 
 That's it. The tool auto-detects the solution file, runs tests, collects coverage, and produces a prioritized report.
-
-## Prerequisites
-
-- [.NET 8 SDK](https://dotnet.microsoft.com/download) or later
-- **git** installed and available on PATH
-- For `scan`: test projects must reference [`coverlet.collector`](https://www.nuget.org/packages/coverlet.collector) (or use `--coverage-tool dotnet-coverage`)
-- For `analyze`: a pre-generated Cobertura XML coverage report
-
-## Installation
-
-```bash
-# From NuGet (recommended)
-dotnet tool install --global dotnet-litmus
-
-# Or from a local build
-dotnet pack Litmus/Litmus.csproj -c Release
-dotnet tool install --global --add-source Litmus/bin/Release dotnet-litmus
-
-# Or run without installing
-dotnet run --project Litmus -- scan
-```
-
-## Commands
-
-### `scan` — run tests and analyze in one step
-
-```bash
-# Auto-detect solution file from current directory
-dotnet-litmus scan
-
-# Specify solution explicitly
-dotnet-litmus scan --solution MyApp.sln
-
-# Target a specific test directory
-dotnet-litmus scan --solution MyApp.sln --tests-dir tests/MyApp.Tests
-
-# Export results
-dotnet-litmus scan --output report.json
-```
-
-`scan` auto-detects the solution file when a single `.sln` or `.slnx` exists in the current directory. It then:
-
-1. Runs `dotnet test` with the XPlat Code Coverage collector
-2. Streams live output so you see build progress and test results in real time
-3. Discovers and merges all `coverage.cobertura.xml` files (one per test project)
-4. Runs the full analysis pipeline (git churn, complexity, seam detection, scoring)
-5. Cleans up temporary test results
-
-### `analyze` — use an existing coverage file
-
-```bash
-# Auto-detect solution, provide coverage file
-dotnet-litmus analyze --coverage TestResults/.../coverage.cobertura.xml
-
-# Specify solution explicitly
-dotnet-litmus analyze --solution MyApp.sln --coverage coverage.xml
-```
-
-Use `analyze` when you already have a Cobertura XML coverage report (e.g., from CI).
-
-## CLI Reference
-
-### `scan` options
-
-| Option | Default | Description |
-|---|---|---|
-| `--solution` | auto-detect | Path to `.sln` or `.slnx`. Auto-detected when one exists in cwd. |
-| `--tests-dir` | solution file | Directory or project to run `dotnet test` against |
-| `--coverage-tool` | coverlet | Coverage collector: `coverlet` or `dotnet-coverage` |
-| `--timeout` | 10 | Maximum minutes for test execution |
-| `--since` | 1 year ago | Git history cutoff (ISO date format, e.g. `2025-01-01`) |
-| `--top` | 20 | Number of files to display |
-| `--exclude` | -- | Glob pattern(s) to exclude (repeatable) |
-| `--output` | -- | Export to `.json` or `.csv` file |
-| `--baseline` | -- | Previous JSON export for delta comparison |
-| `--format` | table | Stdout format: `table`, `json`, or `csv` |
-| `--verbose` | false | Show detailed intermediate scores and live test output |
-| `--quiet` | false | Suppress all output except errors |
-| `--no-color` | false | Disable colored output |
-
-### `analyze` options
-
-| Option | Default | Description |
-|---|---|---|
-| `--solution` | auto-detect | Path to `.sln` or `.slnx`. Auto-detected when one exists in cwd. |
-| `--coverage` | *required* | Path to Cobertura XML coverage file |
-| `--since` | 1 year ago | Git history cutoff (ISO date format) |
-| `--top` | 20 | Number of files to display |
-| `--exclude` | -- | Glob pattern(s) to exclude (repeatable) |
-| `--output` | -- | Export to `.json` or `.csv` file |
-| `--baseline` | -- | Previous JSON export for delta comparison |
-| `--format` | table | Stdout format: `table`, `json`, or `csv` |
-| `--verbose` | false | Show detailed intermediate scores |
-| `--quiet` | false | Suppress all output except errors |
-| `--no-color` | false | Disable colored output |
 
 ## Understanding the Output
 
@@ -171,37 +69,97 @@ The **Risk** column is independently colored to highlight dangerous-but-entangle
 | **Medium** | >= 0.2 | Plan for next sprint | Moderate risk |
 | **Low** | < 0.2 | Backlog or too entangled | Low churn, well-tested, or simple |
 
-## How Scores Are Calculated
+## Commands
 
-### Phase 1 — Risk Score
+Litmus has two commands: `scan` runs tests and analyzes in one step; `analyze` skips testing and uses an existing coverage file.
 
+### `scan` — run tests and analyze in one step
+
+```bash
+# Auto-detect solution file from current directory
+dotnet-litmus scan
+
+# Specify solution explicitly
+dotnet-litmus scan --solution MyApp.sln
+
+# Target a specific test directory
+dotnet-litmus scan --solution MyApp.sln --tests-dir tests/MyApp.Tests
+
+# Export results
+dotnet-litmus scan --output report.json
 ```
-RiskScore = ChurnNorm x (1 - CoverageRate) x (1 + ComplexityNorm)
+
+`scan` auto-detects the solution file when a single `.sln` or `.slnx` exists in the current directory. It then:
+
+1. Runs `dotnet test` with the XPlat Code Coverage collector
+2. Streams live output so you see build progress and test results in real time
+3. Discovers and merges all `coverage.cobertura.xml` files (one per test project)
+4. Runs the full analysis pipeline (git churn, complexity, seam detection, scoring)
+5. Cleans up temporary test results
+
+### `analyze` — use an existing coverage file
+
+```bash
+# Auto-detect solution, provide coverage file
+dotnet-litmus analyze --coverage TestResults/.../coverage.cobertura.xml
+
+# Specify solution explicitly
+dotnet-litmus analyze --solution MyApp.sln --coverage coverage.xml
 ```
 
-Each factor is normalized to [0, 1]. Range: 0 to 2.0. A file that changes constantly, has no tests, and is highly complex scores near 2.0.
+Use `analyze` when you already have a Cobertura XML coverage report (e.g., from CI).
 
-### Phase 2 — Starting Priority
+## CLI Reference
 
-The dependency score measures **unseamed dependencies** — things a test cannot substitute. Six signals are detected via Roslyn:
+### Shared options
 
-| Signal | Weight | What it detects |
+| Option | Default | Description |
 |---|---|---|
-| Unseamed infrastructure calls | 2.0 | `DateTime.Now`, `File.*`, `new HttpClient()`, `new DbContext()` |
-| Direct instantiation in methods | 1.5 | `new ConcreteType()` (excluding DTOs, exceptions, collections) |
-| Concrete constructor parameters | 0.5 | Constructor params without interface convention |
-| Static calls on non-utility types | 1.0 | `MyHelper.Transform()` (excluding `Math`, `Convert`, etc.) |
-| Async seam calls | 1.5 | `await _httpClient.GetAsync()`, `await _db.SaveChangesAsync()` |
-| Concrete downcasts | 1.0 | `(ConcreteType)expr` and `expr as ConcreteType` |
+| `--solution` | auto-detect | Path to `.sln` or `.slnx`. Auto-detected when one exists in cwd. |
+| `--since` | 1 year ago | Git history cutoff (ISO date format, e.g. `2025-01-01`) |
+| `--top` | 20 | Number of files to display |
+| `--exclude` | -- | Glob pattern(s) to exclude (repeatable) |
+| `--output` | -- | Export to `.json` or `.csv` file |
+| `--baseline` | -- | Previous JSON export for delta comparison |
+| `--format` | table | Stdout format: `table`, `json`, or `csv` |
+| `--verbose` | false | Show detailed intermediate scores |
+| `--quiet` | false | Suppress all output except errors |
+| `--no-color` | false | Disable colored output |
 
-DI registration files (`Program.cs`, `Startup.cs`, files with `AddScoped`/`AddSingleton`/`AddTransient`) get a zeroed dependency score.
+### `scan`-only options
 
+| Option | Default | Description |
+|---|---|---|
+| `--tests-dir` | solution file | Directory or project to run `dotnet test` against |
+| `--coverage-tool` | coverlet | Coverage collector: `coverlet` or `dotnet-coverage` |
+| `--timeout` | 10 | Maximum minutes for test execution |
+
+### `analyze`-only options
+
+| Option | Default | Description |
+|---|---|---|
+| `--coverage` | *required* | Path to Cobertura XML coverage file |
+
+## Prerequisites
+
+- [.NET 8 SDK](https://dotnet.microsoft.com/download) or later
+- **git** installed and available on PATH
+- For `scan`: test projects must reference [`coverlet.collector`](https://www.nuget.org/packages/coverlet.collector) (or use `--coverage-tool dotnet-coverage`)
+- For `analyze`: a pre-generated Cobertura XML coverage report
+
+## Installation
+
+```bash
+# From NuGet (recommended)
+dotnet tool install --global dotnet-litmus
+
+# Or from a local build
+dotnet pack Litmus/Litmus.csproj -c Release
+dotnet tool install --global --add-source Litmus/bin/Release dotnet-litmus
+
+# Or run without installing
+dotnet run --project Litmus -- scan
 ```
-StartingPriority = RiskScore x (1 - DependencyNorm)
-```
-
-Fully seamed (`DependencyNorm = 0`) -> Priority equals Risk.
-Maximally entangled (`DependencyNorm = 1`) -> Priority drops to 0.
 
 ## Examples
 
@@ -322,6 +280,55 @@ jobs:
 | `--no-color` | Disable ANSI codes in log output |
 | `--baseline previous.json` | Track regressions over time |
 
+## How Scores Are Calculated
+
+Litmus cross-references four signals to produce its scores:
+
+| Signal | What it measures |
+|---|---|
+| **Git churn** | How frequently a file changes |
+| **Code coverage** | How well a file is tested |
+| **Cyclomatic complexity** | How complex the file's logic is |
+| **Dependency entanglement** | How many unseamed dependencies block testability |
+
+A "seam" (from Michael Feathers' *Working Effectively with Legacy Code*) is a place where you can substitute a dependency without changing production code — typically via dependency injection or an interface. An "unseamed" dependency is one a test cannot replace, like a direct `new HttpClient()` or `DateTime.Now` call.
+
+<details>
+<summary>Phase 1 — Risk Score</summary>
+
+```
+RiskScore = ChurnNorm x (1 - CoverageRate) x (1 + ComplexityNorm)
+```
+
+Each factor is normalized to [0, 1]. Range: 0 to 2.0. A file that changes constantly, has no tests, and is highly complex scores near 2.0.
+
+</details>
+
+<details>
+<summary>Phase 2 — Starting Priority</summary>
+
+The dependency score measures **unseamed dependencies** — things a test cannot substitute. Six signals are detected via Roslyn:
+
+| Signal | Weight | What it detects |
+|---|---|---|
+| Unseamed infrastructure calls | 2.0 | `DateTime.Now`, `File.*`, `new HttpClient()`, `new DbContext()` |
+| Direct instantiation in methods | 1.5 | `new ConcreteType()` (excluding DTOs, exceptions, collections) |
+| Concrete constructor parameters | 0.5 | Constructor params without interface convention |
+| Static calls on non-utility types | 1.0 | `MyHelper.Transform()` (excluding `Math`, `Convert`, etc.) |
+| Async seam calls | 1.5 | `await _httpClient.GetAsync()`, `await _db.SaveChangesAsync()` |
+| Concrete downcasts | 1.0 | `(ConcreteType)expr` and `expr as ConcreteType` |
+
+DI registration files (`Program.cs`, `Startup.cs`, files with `AddScoped`/`AddSingleton`/`AddTransient`) get a zeroed dependency score.
+
+```
+StartingPriority = RiskScore x (1 - DependencyNorm)
+```
+
+Fully seamed (`DependencyNorm = 0`) -> Priority equals Risk.
+Maximally entangled (`DependencyNorm = 1`) -> Priority drops to 0.
+
+</details>
+
 ## Exit Codes
 
 | Code | Meaning |
@@ -329,7 +336,8 @@ jobs:
 | `0` | Success. Analysis completed (or no files found after filters — warning printed). |
 | `1` | Error. Validation failure, missing dependencies, test failure with no coverage, or runtime error. |
 
-## Default Exclusions
+<details>
+<summary>Default exclusions</summary>
 
 The following patterns are always excluded to reduce noise from auto-generated files:
 
@@ -341,6 +349,8 @@ The following patterns are always excluded to reduce noise from auto-generated f
 - `**/obj/**`, `**/bin/**`, `**/wwwroot/**`
 
 Use `--exclude` to add additional patterns on top of these.
+
+</details>
 
 ## Troubleshooting
 
