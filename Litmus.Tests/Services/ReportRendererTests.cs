@@ -348,6 +348,91 @@ public class ReportRendererTests
     }
 
     [Fact]
+    public void ExportHtml_ProducesValidHtmlWithTable()
+    {
+        var reports = new List<FileRiskReport>
+        {
+            MakeReport("A.cs", 0.8),
+            MakeReport("B.cs", 0.3)
+        };
+
+        var html = ReportRenderer.ExportHtml(reports);
+
+        html.Should().Contain("<!DOCTYPE html>");
+        html.Should().Contain("<table id=\"t\">");
+        html.Should().Contain("A.cs");
+        html.Should().Contain("B.cs");
+        html.Should().Contain("</html>");
+    }
+
+    [Fact]
+    public void ExportHtml_WithBaseline_IncludesDeltaColumn()
+    {
+        var reports = new List<FileRiskReport> { MakeReport("A.cs", 0.8) };
+        var baseline = new Dictionary<string, double> { ["A.cs"] = 0.3 };
+
+        var html = ReportRenderer.ExportHtml(reports, baseline);
+
+        html.Should().Contain("Delta");
+        html.Should().Contain("+0.50");
+    }
+
+    [Fact]
+    public void ExportHtml_WithoutBaseline_NoDeltaColumn()
+    {
+        var reports = new List<FileRiskReport> { MakeReport("A.cs", 0.8) };
+
+        var html = ReportRenderer.ExportHtml(reports);
+
+        html.Should().NotContain("Delta");
+    }
+
+    [Fact]
+    public void ExportHtml_NewFileInBaseline_ShowsNew()
+    {
+        var reports = new List<FileRiskReport> { MakeReport("New.cs", 0.5) };
+        var baseline = new Dictionary<string, double> { ["Old.cs"] = 0.3 };
+
+        var html = ReportRenderer.ExportHtml(reports, baseline);
+
+        html.Should().Contain("NEW");
+    }
+
+    [Fact]
+    public void ExportHtml_EscapesHtmlCharacters()
+    {
+        var reports = new List<FileRiskReport> { MakeReport("File<T>.cs", 0.5) };
+
+        var html = ReportRenderer.ExportHtml(reports);
+
+        html.Should().Contain("File&lt;T&gt;.cs");
+        html.Should().NotContain("File<T>.cs");
+    }
+
+    [Fact]
+    public void ExportHtml_IncludesSortingScript()
+    {
+        var reports = new List<FileRiskReport> { MakeReport("A.cs", 0.5) };
+
+        var html = ReportRenderer.ExportHtml(reports);
+
+        html.Should().Contain("function sortTable");
+    }
+
+    [Fact]
+    public void Render_FormatHtml_WritesHtmlToStdout()
+    {
+        var reports = new List<FileRiskReport> { MakeReport("A.cs", 0.8) };
+
+        var renderer = new ReportRenderer(Substitute.For<IFileSystem>());
+        var captured = CaptureConsoleOut(() =>
+            renderer.Render(reports, 20, noColor: true, outputPath: null, skippedFiles: 0, format: "html"));
+
+        captured.Should().Contain("<!DOCTYPE html>");
+        captured.Should().Contain("A.cs");
+    }
+
+    [Fact]
     public void Render_WithoutSinceDate_OmitsDateInSummary()
     {
         var reports = new List<FileRiskReport> { MakeReport("A.cs", 0.8) };

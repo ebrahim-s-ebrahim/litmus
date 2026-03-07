@@ -98,6 +98,9 @@ dotnet-litmus scan --solution MyApp.sln --tests-dir tests/MyApp.Tests
 
 # Export results
 dotnet-litmus scan --output report.json
+
+# Export an HTML report to share with the team
+dotnet-litmus scan --output report.html
 ```
 
 `scan` auto-detects the solution file when a single `.sln` or `.slnx` exists in the current directory. It then:
@@ -130,9 +133,9 @@ Use `analyze` when you already have a Cobertura XML coverage report (e.g., from 
 | `--since` | 1 year ago | Git history cutoff (ISO date format, e.g. `2025-01-01`) |
 | `--top` | 20 | Number of files to display |
 | `--exclude` | -- | Glob pattern(s) to exclude (repeatable) |
-| `--output` | -- | Export to `.json` or `.csv` file |
+| `--output` | -- | Export to `.json`, `.csv`, or `.html` file |
 | `--baseline` | -- | Previous JSON export for delta comparison |
-| `--format` | table | Stdout format: `table`, `json`, or `csv` |
+| `--format` | table | Stdout format: `table`, `json`, `csv`, or `html` |
 | `--verbose` | false | Show detailed intermediate scores |
 | `--quiet` | false | Suppress all output except errors |
 | `--fail-on-threshold` | -- | Exit with code 1 if any file's Risk Score or Starting Priority exceeds this value (0.0-2.0) |
@@ -231,6 +234,16 @@ dotnet-litmus analyze --coverage coverage.xml --format csv > results.csv
 dotnet-litmus scan --quiet --output report.json
 ```
 
+### HTML report
+
+```bash
+# Self-contained HTML file with a sortable table — share in Slack or attach to a PR
+dotnet-litmus scan --output report.html
+
+# Or pipe to stdout
+dotnet-litmus analyze --coverage coverage.xml --format html > report.html
+```
+
 ## CI/CD Integration
 
 Litmus works well in CI pipelines for tracking test debt over time.
@@ -303,6 +316,7 @@ dotnet-litmus scan --fail-on-threshold 1.0 --quiet
 |---|---|
 | `--quiet` | No console output, only exit code and file export |
 | `--output report.json` | Machine-readable export |
+| `--output report.html` | Shareable HTML report |
 | `--format json` | JSON to stdout for piping |
 | `--no-color` | Disable ANSI codes in log output |
 | `--baseline previous.json` | Track regressions over time |
