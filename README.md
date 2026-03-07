@@ -25,6 +25,13 @@ dotnet-litmus scan
 
 That's it. The tool auto-detects the solution file, runs tests, collects coverage, and produces a prioritized report.
 
+### No tests yet?
+
+```bash
+# Analyze without running tests — ranks by churn, complexity, and testability
+dotnet-litmus scan --no-coverage
+```
+
 ## Understanding the Output
 
 ```
@@ -131,6 +138,7 @@ Use `analyze` when you already have a Cobertura XML coverage report (e.g., from 
 | Option | Default | Description |
 |---|---|---|
 | `--tests-dir` | solution file | Directory or project to run `dotnet test` against |
+| `--no-coverage` | false | Skip test execution and coverage collection |
 | `--coverage-tool` | coverlet | Coverage collector: `coverlet` or `dotnet-coverage` |
 | `--timeout` | 10 | Maximum minutes for test execution |
 
@@ -145,6 +153,7 @@ Use `analyze` when you already have a Cobertura XML coverage report (e.g., from 
 - [.NET 8 SDK](https://dotnet.microsoft.com/download) or later
 - **git** installed and available on PATH
 - For `scan`: test projects must reference [`coverlet.collector`](https://www.nuget.org/packages/coverlet.collector) (or use `--coverage-tool dotnet-coverage`)
+- For `scan --no-coverage`: no test projects or coverage tooling required
 - For `analyze`: a pre-generated Cobertura XML coverage report
 
 ## Installation
@@ -184,6 +193,12 @@ dotnet-litmus analyze \
   --exclude "*.Generated.cs" \
   --exclude "**/ViewModels/*.cs" \
   --output report.json
+```
+
+### Legacy codebase with no tests
+
+```bash
+dotnet-litmus scan --no-coverage --top 10
 ```
 
 ### Compare against a baseline
@@ -385,6 +400,16 @@ Or use `dotnet-coverage` which doesn't require a package reference:
 dotnet tool install --global dotnet-coverage
 dotnet-litmus scan --coverage-tool dotnet-coverage
 ```
+
+### No tests in the codebase
+
+If your codebase has no tests yet, skip coverage collection entirely:
+
+```bash
+dotnet-litmus scan --no-coverage
+```
+
+This ranks files by git churn, cyclomatic complexity, and dependency analysis only. All files are treated as 0% coverage. Use this to find where to start writing tests, then re-run without `--no-coverage` once you have coverage data.
 
 ### `scan` hangs during test execution
 

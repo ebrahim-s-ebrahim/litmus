@@ -13,6 +13,7 @@ public class AnalysisOptions
     public string Format { get; set; } = "table";
     public bool Verbose { get; set; }
     public bool Quiet { get; set; }
+    public bool NoCoverage { get; set; }
 
     public static readonly string[] DefaultExclusions =
     [

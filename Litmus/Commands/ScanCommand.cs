@@ -83,6 +83,12 @@ public class ScanCommand
         };
         coverageToolOption.AcceptOnlyFromAmong("coverlet", "dotnet-coverage");
 
+        var noCoverageOption = new Option<bool>("--no-coverage")
+        {
+            Description = "Skip test execution and coverage collection. " +
+                          "Ranks files by churn, complexity, and testability only."
+        };
+
         var command = new Command(
             "scan",
             "Run dotnet test, collect code coverage, and analyze the solution in one step")
@@ -99,7 +105,8 @@ public class ScanCommand
             verboseOption,
             quietOption,
             timeoutOption,
-            coverageToolOption
+            coverageToolOption,
+            noCoverageOption
         };
 
         command.SetAction(parseResult =>
@@ -125,7 +132,8 @@ public class ScanCommand
                 NoColor = parseResult.GetValue(noColorOption),
                 Format = parseResult.GetValue(formatOption)!,
                 Verbose = parseResult.GetValue(verboseOption),
-                Quiet = parseResult.GetValue(quietOption)
+                Quiet = parseResult.GetValue(quietOption),
+                NoCoverage = parseResult.GetValue(noCoverageOption)
             };
 
             var testsDir = parseResult.GetValue(testsDirOption);
@@ -148,6 +156,18 @@ public class ScanCommand
         if (options.Verbose && options.Quiet)
         {
             AnsiConsole.MarkupLine("[red]Error:[/] --verbose and --quiet cannot be used together.");
+            return 1;
+        }
+
+        if (options.NoCoverage && testsDir != null)
+        {
+            AnsiConsole.MarkupLine("[red]Error:[/] --no-coverage and --tests-dir cannot be used together.");
+            return 1;
+        }
+
+        if (options.NoCoverage && coverageTool != "coverlet")
+        {
+            AnsiConsole.MarkupLine("[red]Error:[/] --no-coverage and --coverage-tool cannot be used together.");
             return 1;
         }
 
@@ -187,6 +207,26 @@ public class ScanCommand
                     $"The file '{Markup.Escape(Path.GetFileName(options.BaselinePath))}' has an unsupported extension.");
                 return 1;
             }
+        }
+
+        // --no-coverage fast path: skip test execution entirely
+        if (options.NoCoverage)
+        {
+            try
+            {
+                processRunner.Run("git", "--version", ".");
+            }
+            catch
+            {
+                AnsiConsole.MarkupLine("[red]Error:[/] git must be installed and available on PATH.");
+                return 1;
+            }
+
+            if (!options.Quiet)
+                AnsiConsole.MarkupLine("[bold]Analyzing solution (no coverage — ranking by churn, complexity, and testability)...[/]");
+
+            var emptyCoverage = new CoverageResult();
+            return await AnalyzeCommand.RunAnalysis(options, emptyCoverage, fileSystem, processRunner);
         }
 
         // Check dotnet availability
@@ -367,7 +407,9 @@ public class ScanCommand
                         "[red]Error:[/] No coverage.cobertura.xml files were generated.\n" +
                         "Ensure your test projects reference the coverlet.collector package:\n" +
                         "  dotnet add <test-project> package coverlet.collector\n" +
-                        "Or try: --coverage-tool dotnet-coverage");
+                        "Or try: --coverage-tool dotnet-coverage\n\n" +
+                        "If this codebase has no tests yet, re-run with [bold]--no-coverage[/] to rank\n" +
+                        "files by churn, complexity, and testability without coverage data.");
                 }
                 return 1;
             }

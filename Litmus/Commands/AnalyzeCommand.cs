@@ -365,7 +365,7 @@ public class AnalyzeCommand
                 .ToList();
 
             // Early warning if most files have no coverage entry — likely a configuration issue
-            if (!options.Quiet && filesWithNoCoverageEntry.Count > 0)
+            if (!options.Quiet && !options.NoCoverage && filesWithNoCoverageEntry.Count > 0)
             {
                 var mismatchPct = (double)filesWithNoCoverageEntry.Count / reports.Count * 100;
                 if (mismatchPct > 25)
@@ -383,7 +383,14 @@ public class AnalyzeCommand
             renderer.Render(reports, options.Top, options.NoColor, options.OutputPath, totalSkippedFiles, baseline,
                 options.Format, options.Verbose, options.Quiet, options.Since);
 
-            if (!options.Quiet)
+            if (!options.Quiet && options.NoCoverage)
+            {
+                AnsiConsole.MarkupLine(
+                    "\n[dim]Coverage skipped — all files treated as 0%. " +
+                    "Add tests and re-run without --no-coverage for full analysis.[/]");
+            }
+
+            if (!options.Quiet && !options.NoCoverage)
             {
                 // List individual files with no coverage entry (post-table detail)
                 if (filesWithNoCoverageEntry.Count > 0)

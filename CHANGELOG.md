@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `--no-coverage` option for `scan` command: skip test execution and coverage collection to rank files by churn, complexity, and testability only — for codebases with zero tests
 - `--coverage-tool` option for `scan` command: choose between `coverlet` (default) and `dotnet-coverage` as the coverage collector
 - `--timeout` option for `scan` command: configurable time limit (default: 10 minutes) that kills the process tree if exceeded
 - Live output streaming during `dotnet test`: verbose mode shows per-test results, default mode shows a spinner with the latest output line
@@ -33,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `scan` error message when no coverage files are generated now suggests `--no-coverage` for codebases without tests
 - Pinned all dependency versions to exact resolved versions (no more wildcard `*` ranges)
 
 ## [0.1.0] - 2026-02-27

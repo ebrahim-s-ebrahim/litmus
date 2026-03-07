@@ -510,6 +510,72 @@ public class ScanCommandTests
 
         var output = console.ToString();
         output.Should().Contain("coverlet.collector");
+        output.Should().Contain("--no-coverage");
         output.Should().NotContain("tests failed");
+    }
+
+    // ── --no-coverage tests ────────────────────────────────────────────
+
+    [Fact]
+    public void NoCoverage_SkipsDotnetTest()
+    {
+        _fileSystem.FileExists("test.sln").Returns(true);
+        _processRunner.Run("git", "--version", ".").Returns("git version 2.42.0");
+
+        // Will fail deeper in RunAnalysis (no git repo), but we verify
+        // dotnet test was never called
+        Invoke("--solution", "test.sln", "--no-coverage");
+
+        _processRunner.DidNotReceive().RunWithLiveOutput("dotnet",
+            Arg.Is<string>(a => a.StartsWith("test ")),
+            Arg.Any<string>(),
+            Arg.Any<Action<string>?>(), Arg.Any<int>());
+    }
+
+    [Fact]
+    public void NoCoverage_DoesNotRequireDotnetSdk()
+    {
+        _fileSystem.FileExists("test.sln").Returns(true);
+        // dotnet --version NOT set up — would throw if called
+        _processRunner.Run("git", "--version", ".").Returns("git version 2.42.0");
+
+        // Should not fail due to missing dotnet
+        Invoke("--solution", "test.sln", "--no-coverage");
+
+        _processRunner.DidNotReceive().Run("dotnet", "--version", ".");
+    }
+
+    [Fact]
+    public void NoCoverage_StillRequiresGit()
+    {
+        _fileSystem.FileExists("test.sln").Returns(true);
+        _processRunner.Run("git", "--version", ".")
+            .Throws(new InvalidOperationException("not found"));
+
+        var result = Invoke("--solution", "test.sln", "--no-coverage");
+
+        result.Should().Be(1);
+    }
+
+    [Fact]
+    public void NoCoverage_WithTestsDir_ReturnsError()
+    {
+        _fileSystem.FileExists("test.sln").Returns(true);
+        _fileSystem.DirectoryExists("tests").Returns(true);
+
+        var result = Invoke("--solution", "test.sln", "--no-coverage", "--tests-dir", "tests");
+
+        result.Should().Be(1);
+    }
+
+    [Fact]
+    public void NoCoverage_WithCoverageTool_ReturnsError()
+    {
+        _fileSystem.FileExists("test.sln").Returns(true);
+
+        var result = Invoke("--solution", "test.sln", "--no-coverage",
+            "--coverage-tool", "dotnet-coverage");
+
+        result.Should().Be(1);
     }
 }
