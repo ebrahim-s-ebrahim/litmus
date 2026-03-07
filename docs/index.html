@@ -862,6 +862,10 @@
         <img src="https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square" alt="MIT License">
       </a>
     </div>
+
+    <div style="margin-top: 2.5rem;">
+      <img src="demo.svg" alt="Litmus output showing a ranked table of files by risk and testability" style="max-width: 860px; width: 100%; border-radius: 12px; box-shadow: 0 8px 40px rgba(0,0,0,0.18);">
+    </div>
   </section>
 
   <hr class="divider">
@@ -1262,12 +1266,12 @@
             <tr>
               <td>--output</td>
               <td>&mdash;</td>
-              <td>Export full results to a <code>.json</code> or <code>.csv</code> file.</td>
+              <td>Export full results to a <code>.json</code>, <code>.csv</code>, or <code>.html</code> file.</td>
             </tr>
             <tr>
               <td>--format</td>
               <td>table</td>
-              <td>Output format for stdout: <code>table</code>, <code>json</code>, or <code>csv</code>.</td>
+              <td>Output format for stdout: <code>table</code>, <code>json</code>, <code>csv</code>, or <code>html</code>.</td>
             </tr>
             <tr>
               <td>--baseline</td>
@@ -1285,6 +1289,11 @@
               <td><code>scan</code> only. Coverage collector: <code>coverlet</code> or <code>dotnet-coverage</code>. Use the latter if coverlet hangs.</td>
             </tr>
             <tr>
+              <td>--no-coverage</td>
+              <td>false</td>
+              <td><code>scan</code> only. Skip test execution and coverage collection. Ranks by churn, complexity, and testability only.</td>
+            </tr>
+            <tr>
               <td>--timeout</td>
               <td>10</td>
               <td><code>scan</code> only. Maximum minutes for the test run. Auto-falls back to <code>dotnet-coverage</code> on coverlet timeout.</td>
@@ -1297,7 +1306,12 @@
             <tr>
               <td>--quiet</td>
               <td>false</td>
-              <td>Suppress progress messages. Only output the final table.</td>
+              <td>Suppress all output except errors.</td>
+            </tr>
+            <tr>
+              <td>--fail-on-threshold</td>
+              <td>&mdash;</td>
+              <td>Exit with code 1 if any file&rsquo;s Risk Score or Starting Priority exceeds this value (0.0&ndash;2.0).</td>
             </tr>
             <tr>
               <td>--no-color</td>
@@ -1379,7 +1393,7 @@
           name: litmus-report
           path: report.json</pre>
           </div>
-          <p style="margin-top:1rem; font-size:0.92rem; color:var(--color-text-secondary); line-height:1.6;">Key CI flags: <code style="font-size:0.82rem;">--quiet</code> suppresses console output, <code style="font-size:0.82rem;">--no-color</code> disables ANSI, <code style="font-size:0.82rem;">--format json</code> pipes structured data to stdout.</p>
+          <p style="margin-top:1rem; font-size:0.92rem; color:var(--color-text-secondary); line-height:1.6;">Key CI flags: <code style="font-size:0.82rem;">--quiet</code> suppresses console output, <code style="font-size:0.82rem;">--no-color</code> disables ANSI, <code style="font-size:0.82rem;">--format json</code> pipes structured data to stdout, <code style="font-size:0.82rem;">--output report.html</code> generates a shareable HTML report, and <code style="font-size:0.82rem;">--fail-on-threshold 1.0</code> fails the build if any file exceeds a score.</p>
         </div>
       </div>
     </div>
