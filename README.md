@@ -6,6 +6,10 @@
 
 *Find where to start testing in a legacy codebase.*
 
+<p align="center">
+  <img src="docs/demo.svg" alt="Litmus output showing a ranked table of files by risk and testability" width="860">
+</p>
+
 Litmus is a .NET global CLI tool that answers two questions:
 
 1. **Where is it dangerous to leave code untested?** — ranked by *Risk Score*
@@ -343,6 +347,23 @@ Fully seamed (`DependencyNorm = 0`) -> Priority equals Risk.
 Maximally entangled (`DependencyNorm = 1`) -> Priority drops to 0.
 
 </details>
+
+## How is this different from SonarQube?
+
+SonarQube is a code quality platform that reports code smells, bugs, and coverage gaps — but it doesn't tell you *where to start testing*. It has no concept of git churn, no seam detection, and no prioritized starting list.
+
+Litmus is purpose-built for a different question: *"I inherited a legacy codebase with little or no test coverage. Which files should I test first?"*
+
+| | SonarQube | Litmus |
+|---|---|---|
+| **Goal** | Broad code quality monitoring | Prioritized test starting list |
+| **Signals** | Static analysis rules, coverage % | Git churn + coverage + complexity + seam detection |
+| **Output** | Dashboard of issues | Ranked table: start here, plan next, introduce seams first |
+| **Setup** | Server, database, CI integration | `dotnet tool install`, run from terminal |
+| **Delta tracking** | Requires paid tier for branch analysis | `--baseline` flag (free, built-in) |
+| **Cost** | Free tier limited; paid for full features | Free and open source |
+
+They complement each other. Use SonarQube for ongoing quality gates; use Litmus to decide where to invest testing effort in a legacy codebase.
 
 ## Exit Codes
 
