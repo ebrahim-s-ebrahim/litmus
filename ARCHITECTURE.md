@@ -19,7 +19,7 @@ Litmus.slnx
 │   │   ├── AnalysisOptions.cs         # Parsed CLI options
 │   │   └── FileRiskReport.cs          # Per-file output model
 │   ├── Output/
-│   │   └── ReportRenderer.cs          # Table, JSON, CSV output
+│   │   └── ReportRenderer.cs          # Table, JSON, CSV, HTML output
 │   ├── Services/
 │   │   ├── SolutionParser.cs          # .sln / .slnx parsing
 │   │   ├── GitChurnAnalyzer.cs        # Git log --numstat analysis
@@ -239,6 +239,7 @@ RiskScore = ChurnNorm × (1 - CoverageRate) × (1 + ComplexityNorm)
 **Export formats:**
 - **JSON:** Serialized with `System.Text.Json`, camelCase naming, indented
 - **CSV:** Manual StringBuilder with proper field escaping (commas, quotes, newlines)
+- **HTML:** Self-contained `.html` file with inline CSS/JS, sortable table columns, color-coded risk/priority levels, and baseline delta support
 
 **Design decision -- Spectre.Console vs raw Console.WriteLine:**
 Spectre provides cross-platform ANSI color support, table rendering with borders and alignment, and automatic terminal width handling. The alternative would be manual padding and escape codes, which is error-prone across terminals.
@@ -364,7 +365,7 @@ This differs from the pre-release API (`AddOption`, `SetHandler` with delegates,
 | `DependencyAnalyzerTests` | 39 | 6-signal detection (infra, new, ctor params, static, async seam, casts), DI registration, normalization |
 | `FileFilterHelperTests` | 9 | Glob pattern matching, default exclusions |
 | `RiskScorerTests` | 10 | Zero cases, boundary classification, complexity amplification, score cap |
-| `ReportRendererTests` | 19 | Baseline stats, JSON/CSV export, --format stdout, --verbose, --quiet |
+| `ReportRendererTests` | 26 | Baseline stats, JSON/CSV/HTML export, --format stdout, --verbose, --quiet |
 | `AnalyzeCommandIntegrationTests` | 11 | End-to-end pipeline with real git repo, --format json/csv, --baseline, progress |
 
 Unit tests mock `IFileSystem` and `IProcessRunner`, making them fast and deterministic. Integration tests create real temp git repos with `.slnx`, `.cs` files, git history, and Cobertura XML.

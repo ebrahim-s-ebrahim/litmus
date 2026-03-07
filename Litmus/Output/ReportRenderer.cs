@@ -20,12 +20,16 @@ public class ReportRenderer
         Dictionary<string, double>? baseline = null, string format = "table",
         bool verbose = false, bool quiet = false, DateTime? sinceDate = null)
     {
-        // Structured stdout formats: write JSON or CSV to Console.Out and skip the table
-        if (format is "json" or "csv")
+        // Structured stdout formats: write JSON, CSV, or HTML to Console.Out and skip the table
+        if (format is "json" or "csv" or "html")
         {
-            var content = format == "json"
-                ? ExportJson(reports, baseline)
-                : ExportCsv(reports, baseline);
+            var content = format switch
+            {
+                "json" => ExportJson(reports, baseline),
+                "csv" => ExportCsv(reports, baseline),
+                "html" => ExportHtml(reports, baseline),
+                _ => throw new ArgumentException($"Unsupported format: {format}")
+            };
             Console.Out.Write(content);
 
             // Still export to file if --output was also provided
@@ -244,7 +248,8 @@ public class ReportRenderer
         {
             ".json" => ExportJson(reports, baseline),
             ".csv" => ExportCsv(reports, baseline),
-            _ => throw new ArgumentException($"Unsupported output format: {extension}. Use .json or .csv.")
+            ".html" or ".htm" => ExportHtml(reports, baseline),
+            _ => throw new ArgumentException($"Unsupported output format: {extension}. Use .json, .csv, or .html.")
         };
 
         File.WriteAllText(outputPath, content);
@@ -340,6 +345,142 @@ public class ReportRenderer
         }
 
         return sb.ToString();
+    }
+
+    internal static string ExportHtml(List<FileRiskReport> reports, Dictionary<string, double>? baseline = null)
+    {
+        var hasBaseline = baseline != null;
+        var sb = new StringBuilder();
+        sb.AppendLine("""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Litmus Report</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 2rem; background: #f8f9fa; color: #212529; }
+  h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }
+  .meta { color: #6c757d; margin-bottom: 1.5rem; font-size: 0.875rem; }
+  table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+  th { background: #343a40; color: #fff; text-align: left; padding: 0.625rem 0.75rem; font-size: 0.8125rem; cursor: pointer; user-select: none; white-space: nowrap; }
+  th:hover { background: #495057; }
+  th .arrow { font-size: 0.625rem; margin-left: 0.25rem; }
+  td { padding: 0.5rem 0.75rem; border-bottom: 1px solid #e9ecef; font-size: 0.8125rem; }
+  tr:hover td { background: #f1f3f5; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .high { color: #dc3545; font-weight: 600; }
+  .medium { color: #e67700; font-weight: 600; }
+  .low { color: #28a745; }
+  .delta-pos { color: #dc3545; }
+  .delta-neg { color: #28a745; }
+  .delta-new { color: #6c757d; font-style: italic; }
+</style>
+</head>
+<body>
+<h1>Litmus Report</h1>
+""");
+        sb.AppendLine($"<p class=\"meta\">Generated {DateTime.UtcNow:yyyy-MM-dd HH:mm} UTC &mdash; {reports.Count} files</p>");
+        sb.AppendLine("<table id=\"t\">");
+        sb.AppendLine("<thead><tr>");
+        var columns = new List<(string header, bool numeric)>
+        {
+            ("#", true), ("File", false), ("Commits", true), ("Coverage", true),
+            ("Complexity", true), ("Dependency", false), ("Risk", true), ("Priority", true)
+        };
+        if (hasBaseline) columns.Add(("Delta", true));
+        columns.Add(("Level", false));
+
+        foreach (var (header, _) in columns)
+            sb.AppendLine($"  <th onclick=\"sortTable(this)\">{HtmlEncode(header)}<span class=\"arrow\"></span></th>");
+        sb.AppendLine("</tr></thead>");
+        sb.AppendLine("<tbody>");
+
+        for (var i = 0; i < reports.Count; i++)
+        {
+            var r = reports[i];
+            var priorityCss = r.PriorityLevel.ToLowerInvariant();
+            var riskCss = r.RiskLevel.ToLowerInvariant();
+            var depCss = r.DependencyLevel switch
+            {
+                "Very High" => "high",
+                "High" => "medium",
+                _ => ""
+            };
+
+            sb.AppendLine("<tr>");
+            sb.AppendLine($"  <td class=\"num\">{i + 1}</td>");
+            sb.AppendLine($"  <td>{HtmlEncode(r.File)}</td>");
+            sb.AppendLine($"  <td class=\"num\">{r.Commits}</td>");
+            sb.AppendLine($"  <td class=\"num\">{r.CoverageRate * 100:F0}%</td>");
+            sb.AppendLine($"  <td class=\"num\">{r.CyclomaticComplexity}</td>");
+            sb.AppendLine($"  <td class=\"{depCss}\">{HtmlEncode(r.DependencyLevel)}</td>");
+            sb.AppendLine($"  <td class=\"num {riskCss}\">{r.RiskScore:F2}</td>");
+            sb.AppendLine($"  <td class=\"num {priorityCss}\">{r.StartingPriority:F2}</td>");
+
+            if (hasBaseline)
+            {
+                if (!baseline!.TryGetValue(r.File, out var prev))
+                {
+                    sb.AppendLine("  <td class=\"num delta-new\">NEW</td>");
+                }
+                else
+                {
+                    var delta = r.StartingPriority - prev;
+                    if (Math.Abs(delta) < 0.005)
+                        sb.AppendLine("  <td class=\"num\">&mdash;</td>");
+                    else
+                    {
+                        var sign = delta > 0 ? "+" : "";
+                        var css = delta > 0 ? "delta-pos" : "delta-neg";
+                        sb.AppendLine($"  <td class=\"num {css}\">{sign}{delta:F2}</td>");
+                    }
+                }
+            }
+
+            sb.AppendLine($"  <td class=\"{priorityCss}\">{HtmlEncode(r.PriorityLevel)}</td>");
+            sb.AppendLine("</tr>");
+        }
+
+        sb.AppendLine("</tbody></table>");
+
+        // Client-side sorting script
+        sb.AppendLine("""
+<script>
+function sortTable(th) {
+  const table = document.getElementById('t');
+  const tbody = table.tBodies[0];
+  const idx = Array.from(th.parentNode.children).indexOf(th);
+  const rows = Array.from(tbody.rows);
+  const cur = th.dataset.dir || '';
+  // Reset all arrows
+  th.parentNode.querySelectorAll('.arrow').forEach(a => a.textContent = '');
+  const dir = cur === 'asc' ? 'desc' : 'asc';
+  th.dataset.dir = dir;
+  th.querySelector('.arrow').textContent = dir === 'asc' ? ' \u25B2' : ' \u25BC';
+  rows.sort((a, b) => {
+    let av = a.cells[idx].textContent.trim();
+    let bv = b.cells[idx].textContent.trim();
+    // Try numeric comparison
+    const an = parseFloat(av.replace('%',''));
+    const bn = parseFloat(bv.replace('%',''));
+    if (!isNaN(an) && !isNaN(bn)) return dir === 'asc' ? an - bn : bn - an;
+    return dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+  });
+  rows.forEach(r => tbody.appendChild(r));
+}
+</script>
+</body>
+</html>
+""");
+
+        return sb.ToString();
+    }
+
+    private static string HtmlEncode(string text)
+    {
+        return text.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;").Replace("\"", "&quot;");
     }
 
     private static string EscapeCsvField(string field)

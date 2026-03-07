@@ -42,7 +42,7 @@ public class AnalyzeCommand
 
         var outputOption = new Option<string?>("--output")
         {
-            Description = "Export results to a file (format determined by extension: .json or .csv)"
+            Description = "Export results to a file (format determined by extension: .json, .csv, or .html)"
         };
 
         var baselineOption = new Option<string?>("--baseline")
@@ -57,10 +57,10 @@ public class AnalyzeCommand
 
         var formatOption = new Option<string>("--format")
         {
-            Description = "Output format for stdout: table, json, or csv (independent of --output file format)",
+            Description = "Output format for stdout: table, json, csv, or html (independent of --output file format)",
             DefaultValueFactory = _ => "table"
         };
-        formatOption.AcceptOnlyFromAmong("table", "json", "csv");
+        formatOption.AcceptOnlyFromAmong("table", "json", "csv", "html");
 
         var verboseOption = new Option<bool>("--verbose")
         {
@@ -70,6 +70,11 @@ public class AnalyzeCommand
         var quietOption = new Option<bool>("--quiet")
         {
             Description = "Suppress all output except errors (exit code only)"
+        };
+
+        var failOnThresholdOption = new Option<double?>("--fail-on-threshold")
+        {
+            Description = "Exit with code 1 if any file's Risk Score or Starting Priority exceeds this value (0.0-2.0)"
         };
 
         var command = new Command("analyze", "Analyze .NET solution for high-risk files and starting priority")
@@ -84,7 +89,8 @@ public class AnalyzeCommand
             noColorOption,
             formatOption,
             verboseOption,
-            quietOption
+            quietOption,
+            failOnThresholdOption
         };
 
         command.SetAction(parseResult =>
@@ -110,7 +116,8 @@ public class AnalyzeCommand
                 NoColor = parseResult.GetValue(noColorOption),
                 Format = parseResult.GetValue(formatOption)!,
                 Verbose = parseResult.GetValue(verboseOption),
-                Quiet = parseResult.GetValue(quietOption)
+                Quiet = parseResult.GetValue(quietOption),
+                FailOnThreshold = parseResult.GetValue(failOnThresholdOption)
             };
 
             return Execute(options, fileSystem, processRunner);
@@ -365,7 +372,7 @@ public class AnalyzeCommand
                 .ToList();
 
             // Early warning if most files have no coverage entry — likely a configuration issue
-            if (!options.Quiet && filesWithNoCoverageEntry.Count > 0)
+            if (!options.Quiet && !options.NoCoverage && filesWithNoCoverageEntry.Count > 0)
             {
                 var mismatchPct = (double)filesWithNoCoverageEntry.Count / reports.Count * 100;
                 if (mismatchPct > 25)
@@ -383,7 +390,14 @@ public class AnalyzeCommand
             renderer.Render(reports, options.Top, options.NoColor, options.OutputPath, totalSkippedFiles, baseline,
                 options.Format, options.Verbose, options.Quiet, options.Since);
 
-            if (!options.Quiet)
+            if (!options.Quiet && options.NoCoverage)
+            {
+                AnsiConsole.MarkupLine(
+                    "\n[dim]Coverage skipped — all files treated as 0%. " +
+                    "Add tests and re-run without --no-coverage for full analysis.[/]");
+            }
+
+            if (!options.Quiet && !options.NoCoverage)
             {
                 // List individual files with no coverage entry (post-table detail)
                 if (filesWithNoCoverageEntry.Count > 0)
@@ -395,6 +409,25 @@ public class AnalyzeCommand
                     }
                     if (filesWithNoCoverageEntry.Count > 10)
                         AnsiConsole.MarkupLine($"  ... and {filesWithNoCoverageEntry.Count - 10} more.");
+                }
+            }
+
+            // --fail-on-threshold: exit 1 if any file exceeds the threshold
+            if (options.FailOnThreshold.HasValue)
+            {
+                var threshold = options.FailOnThreshold.Value;
+                var failing = reports
+                    .Where(r => r.RiskScore > threshold || r.StartingPriority > threshold)
+                    .ToList();
+
+                if (failing.Count > 0)
+                {
+                    if (!options.Quiet)
+                    {
+                        AnsiConsole.MarkupLine(
+                            $"\n[red]Threshold exceeded:[/] {failing.Count} file(s) have a Risk Score or Starting Priority above {threshold:F2}.");
+                    }
+                    return 1;
                 }
             }
 

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `--no-coverage` option for `scan` command: skip test execution and coverage collection to rank files by churn, complexity, and testability only — for codebases with zero tests
 - `--coverage-tool` option for `scan` command: choose between `coverlet` (default) and `dotnet-coverage` as the coverage collector
 - `--timeout` option for `scan` command: configurable time limit (default: 10 minutes) that kills the process tree if exceeded
 - Live output streaming during `dotnet test`: verbose mode shows per-test results, default mode shows a spinner with the latest output line
@@ -19,7 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Signal 6: concrete downcast detection (`(ConcreteType)expr`, `expr as ConcreteType`) with ×1.0 weight
 - DI registration file heuristic: `Program.cs`, `Startup.cs`, and files with `AddScoped`/`AddSingleton`/`AddTransient` calls get zeroed dependency scores
 - Progress bars during analysis using `AnsiConsole.Progress()` for complexity and dependency analyzers
-- `--format json|csv|table` option for structured stdout output, enabling piping to tools like `jq`
+- `--format json|csv|html|table` option for structured stdout output, enabling piping to tools like `jq`
+- HTML report output: self-contained `.html` file with sortable table, color-coded risk/priority levels, and baseline delta support — via `--output report.html` or `--format html`
 - `--baseline <path.json>` option for comparing against a previous analysis run (Delta column, summary line)
 - Integration tests exercising the full `analyze` pipeline with a real temp git repo
 - Pipeline parallelism: churn, complexity, and dependency analyzers now run concurrently via `Task.WhenAll`
@@ -33,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `scan` error message when no coverage files are generated now suggests `--no-coverage` for codebases without tests
 - Pinned all dependency versions to exact resolved versions (no more wildcard `*` ranges)
 
 ## [0.1.0] - 2026-02-27
