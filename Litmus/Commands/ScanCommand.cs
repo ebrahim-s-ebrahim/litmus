@@ -89,6 +89,11 @@ public class ScanCommand
                           "Ranks files by churn, complexity, and testability only."
         };
 
+        var failOnThresholdOption = new Option<double?>("--fail-on-threshold")
+        {
+            Description = "Exit with code 1 if any file's Risk Score or Starting Priority exceeds this value (0.0-2.0)"
+        };
+
         var command = new Command(
             "scan",
             "Run dotnet test, collect code coverage, and analyze the solution in one step")
@@ -106,7 +111,8 @@ public class ScanCommand
             quietOption,
             timeoutOption,
             coverageToolOption,
-            noCoverageOption
+            noCoverageOption,
+            failOnThresholdOption
         };
 
         command.SetAction(parseResult =>
@@ -133,7 +139,8 @@ public class ScanCommand
                 Format = parseResult.GetValue(formatOption)!,
                 Verbose = parseResult.GetValue(verboseOption),
                 Quiet = parseResult.GetValue(quietOption),
-                NoCoverage = parseResult.GetValue(noCoverageOption)
+                NoCoverage = parseResult.GetValue(noCoverageOption),
+                FailOnThreshold = parseResult.GetValue(failOnThresholdOption)
             };
 
             var testsDir = parseResult.GetValue(testsDirOption);

@@ -135,6 +135,7 @@ Use `analyze` when you already have a Cobertura XML coverage report (e.g., from 
 | `--format` | table | Stdout format: `table`, `json`, or `csv` |
 | `--verbose` | false | Show detailed intermediate scores |
 | `--quiet` | false | Suppress all output except errors |
+| `--fail-on-threshold` | -- | Exit with code 1 if any file's Risk Score or Starting Priority exceeds this value (0.0-2.0) |
 | `--no-color` | false | Disable colored output |
 
 ### `scan`-only options
@@ -154,7 +155,7 @@ Use `analyze` when you already have a Cobertura XML coverage report (e.g., from 
 
 ## Prerequisites
 
-- [.NET 8 SDK](https://dotnet.microsoft.com/download) or later
+- [.NET 8 SDK](https://dotnet.microsoft.com/download) or later (including .NET 9 and .NET 10)
 - **git** installed and available on PATH
 - For `scan`: test projects must reference [`coverlet.collector`](https://www.nuget.org/packages/coverlet.collector) (or use `--coverage-tool dotnet-coverage`)
 - For `scan --no-coverage`: no test projects or coverage tooling required
@@ -289,6 +290,13 @@ jobs:
           path: report.json
 ```
 
+### Quality gate
+
+```bash
+# Fail the build if any file scores above 1.0
+dotnet-litmus scan --fail-on-threshold 1.0 --quiet
+```
+
 ### Key flags for CI
 
 | Flag | Purpose |
@@ -298,6 +306,7 @@ jobs:
 | `--format json` | JSON to stdout for piping |
 | `--no-color` | Disable ANSI codes in log output |
 | `--baseline previous.json` | Track regressions over time |
+| `--fail-on-threshold 1.0` | Fail the build if any file exceeds a score |
 
 ## How Scores Are Calculated
 
@@ -370,7 +379,7 @@ They complement each other. Use SonarQube for ongoing quality gates; use Litmus 
 | Code | Meaning |
 |---|---|
 | `0` | Success. Analysis completed (or no files found after filters — warning printed). |
-| `1` | Error. Validation failure, missing dependencies, test failure with no coverage, or runtime error. |
+| `1` | Error. Validation failure, missing dependencies, test failure with no coverage, runtime error, or `--fail-on-threshold` exceeded. |
 
 <details>
 <summary>Default exclusions</summary>

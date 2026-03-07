@@ -72,6 +72,11 @@ public class AnalyzeCommand
             Description = "Suppress all output except errors (exit code only)"
         };
 
+        var failOnThresholdOption = new Option<double?>("--fail-on-threshold")
+        {
+            Description = "Exit with code 1 if any file's Risk Score or Starting Priority exceeds this value (0.0-2.0)"
+        };
+
         var command = new Command("analyze", "Analyze .NET solution for high-risk files and starting priority")
         {
             solutionOption,
@@ -84,7 +89,8 @@ public class AnalyzeCommand
             noColorOption,
             formatOption,
             verboseOption,
-            quietOption
+            quietOption,
+            failOnThresholdOption
         };
 
         command.SetAction(parseResult =>
@@ -110,7 +116,8 @@ public class AnalyzeCommand
                 NoColor = parseResult.GetValue(noColorOption),
                 Format = parseResult.GetValue(formatOption)!,
                 Verbose = parseResult.GetValue(verboseOption),
-                Quiet = parseResult.GetValue(quietOption)
+                Quiet = parseResult.GetValue(quietOption),
+                FailOnThreshold = parseResult.GetValue(failOnThresholdOption)
             };
 
             return Execute(options, fileSystem, processRunner);
@@ -402,6 +409,25 @@ public class AnalyzeCommand
                     }
                     if (filesWithNoCoverageEntry.Count > 10)
                         AnsiConsole.MarkupLine($"  ... and {filesWithNoCoverageEntry.Count - 10} more.");
+                }
+            }
+
+            // --fail-on-threshold: exit 1 if any file exceeds the threshold
+            if (options.FailOnThreshold.HasValue)
+            {
+                var threshold = options.FailOnThreshold.Value;
+                var failing = reports
+                    .Where(r => r.RiskScore > threshold || r.StartingPriority > threshold)
+                    .ToList();
+
+                if (failing.Count > 0)
+                {
+                    if (!options.Quiet)
+                    {
+                        AnsiConsole.MarkupLine(
+                            $"\n[red]Threshold exceeded:[/] {failing.Count} file(s) have a Risk Score or Starting Priority above {threshold:F2}.");
+                    }
+                    return 1;
                 }
             }
 
