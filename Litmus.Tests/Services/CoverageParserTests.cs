@@ -98,6 +98,94 @@ public class CoverageParserTests
     }
 
     // -------------------------------------------------------------------------
+    // Multi-class per file — coverlet generates multiple <class> entries for
+    // files with compiler-generated types (lambdas, async state machines).
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public void Parse_MultipleClassesPerFile_AggregatesLineData()
+    {
+        _fileSystem.ReadAllText("coverage.xml").Returns(TestFixtures.CoberturaWithMultipleClassesPerFile);
+
+        var result = _sut.Parse("coverage.xml");
+
+        // UserService.cs: 10 lines total (5 from main class + 5 from <>c), 6 hit
+        result.FileCoverage["MyApp/Services/UserService.cs"].Should().BeApproximately(0.6, 0.01,
+            "coverage should aggregate lines across all class entries for the same file");
+    }
+
+    [Fact]
+    public void Parse_MultipleClassesPerFile_SingleClassFileUnaffected()
+    {
+        _fileSystem.ReadAllText("coverage.xml").Returns(TestFixtures.CoberturaWithMultipleClassesPerFile);
+
+        var result = _sut.Parse("coverage.xml");
+
+        // OrderService.cs has only one class entry — should match its line data
+        result.FileCoverage["MyApp/Services/OrderService.cs"].Should().Be(0.5);
+    }
+
+    [Fact]
+    public void Parse_MultipleClassesPerFile_DeduplicatesOverlappingLines()
+    {
+        var xml = """
+            <?xml version="1.0" encoding="utf-8"?>
+            <coverage line-rate="0" branch-rate="0" version="1.0">
+              <packages>
+                <package name="MyApp">
+                  <classes>
+                    <class name="MyApp.Svc" filename="Svc.cs" line-rate="0.5">
+                      <lines>
+                        <line number="1" hits="1"/>
+                        <line number="2" hits="0"/>
+                      </lines>
+                    </class>
+                    <class name="MyApp.Svc+Nested" filename="Svc.cs" line-rate="1">
+                      <lines>
+                        <line number="2" hits="1"/>
+                        <line number="3" hits="1"/>
+                      </lines>
+                    </class>
+                  </classes>
+                </package>
+              </packages>
+            </coverage>
+            """;
+        _fileSystem.ReadAllText("coverage.xml").Returns(xml);
+
+        var result = _sut.Parse("coverage.xml");
+
+        // Lines: 1(hit), 2(hit — max of 0 and 1), 3(hit) → 3/3 = 1.0
+        result.FileCoverage["Svc.cs"].Should().Be(1.0,
+            "overlapping line numbers should take the max hits, so line 2 counts as hit");
+    }
+
+    [Fact]
+    public void Parse_ClassWithNoLineElements_FallsBackToLineRate()
+    {
+        var xml = """
+            <?xml version="1.0" encoding="utf-8"?>
+            <coverage line-rate="0" branch-rate="0" version="1.0">
+              <packages>
+                <package name="MyApp">
+                  <classes>
+                    <class name="MyApp.Empty" filename="Empty.cs" line-rate="0.75">
+                      <lines/>
+                    </class>
+                  </classes>
+                </package>
+              </packages>
+            </coverage>
+            """;
+        _fileSystem.ReadAllText("coverage.xml").Returns(xml);
+
+        var result = _sut.Parse("coverage.xml");
+
+        result.FileCoverage["Empty.cs"].Should().Be(0.75,
+            "when no <line> elements exist, should fall back to line-rate attribute");
+    }
+
+    // -------------------------------------------------------------------------
     // Merge — used by scan command when multiple test projects each produce a
     // coverage.cobertura.xml
     // -------------------------------------------------------------------------

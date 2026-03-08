@@ -348,17 +348,36 @@ public class IntegrationTestFixture : IDisposable
                   <classes>
                     <class name="MyApp.Services.SimpleService" filename="{servicesDir}/SimpleService.cs" line-rate="0.90">
                       <lines>
-                        <line number="5" hits="10" />
+                        <line number="1" hits="1" />
+                        <line number="2" hits="1" />
+                        <line number="3" hits="1" />
+                        <line number="4" hits="1" />
+                        <line number="5" hits="1" />
+                        <line number="6" hits="1" />
+                        <line number="7" hits="1" />
+                        <line number="8" hits="1" />
+                        <line number="9" hits="1" />
+                        <line number="10" hits="0" />
                       </lines>
                     </class>
                     <class name="MyApp.Services.OrderService" filename="{servicesDir}/OrderService.cs" line-rate="0.10">
                       <lines>
-                        <line number="10" hits="1" />
+                        <line number="1" hits="1" />
+                        <line number="2" hits="0" />
+                        <line number="3" hits="0" />
+                        <line number="4" hits="0" />
+                        <line number="5" hits="0" />
+                        <line number="6" hits="0" />
+                        <line number="7" hits="0" />
+                        <line number="8" hits="0" />
+                        <line number="9" hits="0" />
+                        <line number="10" hits="0" />
                       </lines>
                     </class>
                     <class name="MyApp.Services.DataAccess" filename="{servicesDir}/DataAccess.cs" line-rate="0.50">
                       <lines>
-                        <line number="10" hits="5" />
+                        <line number="1" hits="1" />
+                        <line number="2" hits="0" />
                       </lines>
                     </class>
                   </classes>

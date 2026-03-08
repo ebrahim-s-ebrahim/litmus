@@ -35,24 +35,64 @@ public class CoverageParser
         var result = new CoverageResult();
 
         // Cobertura format: <coverage> -> <packages> -> <package> -> <classes> -> <class filename="...">
+        // Coverlet generates multiple <class> entries per file (main class + compiler-generated
+        // types like <>c, <>d__N). We group by filename and aggregate <line> elements to compute
+        // an accurate per-file coverage rate.
         var classes = doc.Descendants("class");
 
+        var fileGroups = new Dictionary<string, List<XElement>>();
         foreach (var cls in classes)
         {
             var filename = cls.Attribute("filename")?.Value;
-            var lineRateStr = cls.Attribute("line-rate")?.Value;
-
-            if (filename == null || lineRateStr == null)
+            if (filename == null)
                 continue;
 
-            if (!double.TryParse(lineRateStr, CultureInfo.InvariantCulture, out var lineRate))
-                continue;
-
-            // Normalize path separators
             var normalizedPath = filename.Replace('\\', '/');
+            if (!fileGroups.TryGetValue(normalizedPath, out var list))
+            {
+                list = new List<XElement>();
+                fileGroups[normalizedPath] = list;
+            }
+            list.Add(cls);
+        }
 
-            // If multiple class entries exist for same file, take the last one
-            result.FileCoverage[normalizedPath] = lineRate;
+        foreach (var (filePath, classList) in fileGroups)
+        {
+            // Collect all <line> elements across every class in this file,
+            // deduplicating by line number (take max hits per line).
+            var lineHits = new Dictionary<int, int>();
+            foreach (var cls in classList)
+            {
+                foreach (var line in cls.Descendants("line"))
+                {
+                    var numStr = line.Attribute("number")?.Value;
+                    var hitsStr = line.Attribute("hits")?.Value;
+                    if (numStr == null || hitsStr == null)
+                        continue;
+                    if (!int.TryParse(numStr, out var lineNum) || !int.TryParse(hitsStr, out var hits))
+                        continue;
+
+                    if (!lineHits.TryGetValue(lineNum, out var existing) || hits > existing)
+                        lineHits[lineNum] = hits;
+                }
+            }
+
+            double lineRate;
+            if (lineHits.Count > 0)
+            {
+                lineRate = (double)lineHits.Values.Count(h => h > 0) / lineHits.Count;
+            }
+            else
+            {
+                // No <line> elements — fall back to line-rate attribute from last class
+                var lastLineRateStr = classList[^1].Attribute("line-rate")?.Value;
+                lineRate = lastLineRateStr != null &&
+                           double.TryParse(lastLineRateStr, CultureInfo.InvariantCulture, out var parsed)
+                    ? parsed
+                    : 0.0;
+            }
+
+            result.FileCoverage[filePath] = lineRate;
         }
 
         return result;

@@ -11,16 +11,88 @@ public static class TestFixtures
                 <class name="MyApp.Services.UserService" filename="MyApp/Services/UserService.cs" line-rate="0.23">
                   <lines>
                     <line number="1" hits="1"/>
+                    <line number="2" hits="1"/>
+                    <line number="3" hits="1"/>
+                    <line number="4" hits="0"/>
+                    <line number="5" hits="0"/>
+                    <line number="6" hits="0"/>
+                    <line number="7" hits="0"/>
+                    <line number="8" hits="0"/>
+                    <line number="9" hits="0"/>
+                    <line number="10" hits="0"/>
+                    <line number="11" hits="0"/>
+                    <line number="12" hits="0"/>
+                    <line number="13" hits="0"/>
                   </lines>
                 </class>
                 <class name="MyApp.Services.OrderService" filename="MyApp/Services/OrderService.cs" line-rate="0.85">
                   <lines>
                     <line number="1" hits="1"/>
+                    <line number="2" hits="1"/>
+                    <line number="3" hits="1"/>
+                    <line number="4" hits="1"/>
+                    <line number="5" hits="1"/>
+                    <line number="6" hits="1"/>
+                    <line number="7" hits="1"/>
+                    <line number="8" hits="1"/>
+                    <line number="9" hits="1"/>
+                    <line number="10" hits="1"/>
+                    <line number="11" hits="1"/>
+                    <line number="12" hits="1"/>
+                    <line number="13" hits="1"/>
+                    <line number="14" hits="1"/>
+                    <line number="15" hits="1"/>
+                    <line number="16" hits="1"/>
+                    <line number="17" hits="1"/>
+                    <line number="18" hits="0"/>
+                    <line number="19" hits="0"/>
+                    <line number="20" hits="0"/>
                   </lines>
                 </class>
                 <class name="MyApp.Models.User" filename="MyApp/Models/User.cs" line-rate="1">
                   <lines>
                     <line number="1" hits="1"/>
+                  </lines>
+                </class>
+              </classes>
+            </package>
+          </packages>
+        </coverage>
+        """;
+
+    /// <summary>
+    /// Cobertura XML where a single file has multiple class entries —
+    /// the main class plus a compiler-generated lambda closure class.
+    /// Coverlet produces this layout for files containing lambdas/async.
+    /// </summary>
+    public static string CoberturaWithMultipleClassesPerFile => """
+        <?xml version="1.0" encoding="utf-8"?>
+        <coverage line-rate="0.6" branch-rate="0" version="1.0" timestamp="1234567890">
+          <packages>
+            <package name="MyApp">
+              <classes>
+                <class name="MyApp.Services.UserService" filename="MyApp/Services/UserService.cs" line-rate="1.0">
+                  <lines>
+                    <line number="1" hits="1"/>
+                    <line number="2" hits="1"/>
+                    <line number="3" hits="1"/>
+                    <line number="10" hits="1"/>
+                    <line number="11" hits="1"/>
+                  </lines>
+                </class>
+                <class name="MyApp.Services.UserService+&lt;&gt;c" filename="MyApp/Services/UserService.cs" line-rate="0.2">
+                  <lines>
+                    <line number="20" hits="1"/>
+                    <line number="21" hits="0"/>
+                    <line number="22" hits="0"/>
+                    <line number="23" hits="0"/>
+                    <line number="24" hits="0"/>
+                  </lines>
+                </class>
+                <class name="MyApp.Services.OrderService" filename="MyApp/Services/OrderService.cs" line-rate="0.5">
+                  <lines>
+                    <line number="1" hits="1"/>
+                    <line number="2" hits="0"/>
                   </lines>
                 </class>
               </classes>
